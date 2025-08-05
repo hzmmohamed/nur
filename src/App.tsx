@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/resizable";
 import { MenuIcon, PauseIcon, PlayIcon, SquareStopIcon } from "lucide-react";
 import { Timeline } from "./components/ui/timeline";
+import { FileViewer } from "./components/ui/file-viewer";
 
 function App({}: React.PropsWithChildren) {
   return (
@@ -16,7 +17,8 @@ function App({}: React.PropsWithChildren) {
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel defaultSize={75}>
                 <div className="flex h-full px-16 py-12">
-                  <canvas className="w-full h-full bg-zinc-100" />
+                  {/* <canvas className="w-full h-full bg-zinc-100" /> */}
+                  <FileViewer />
                 </div>
               </ResizablePanel>
               <ResizableHandle withHandle />
@@ -40,7 +42,7 @@ function App({}: React.PropsWithChildren) {
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={20}>
-            <div className="flex h-[200px] items-center justify-center p-6">
+            <div className="flex h-full items-center justify-center p-6 bg-zinc-900">
               <span className="font-semibold">Tools Sidebar</span>
             </div>
           </ResizablePanel>
