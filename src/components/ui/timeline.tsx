@@ -48,7 +48,7 @@ export const Timeline: FC = () => {
     };
 
     // Handler for mouse up to stop dragging, explicitly typing the event
-    const handleMouseUp = (e: globalThis.MouseEvent) => {
+    const handleMouseUp = () => {
       setIsDraggingLeft(false);
       setIsDraggingRight(false);
     };
