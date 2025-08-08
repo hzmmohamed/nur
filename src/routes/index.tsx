@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { FileViewer } from "@/components/canvas";
+import { Canvas } from "@/components/canvas";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -25,7 +25,7 @@ function Index() {
               <ResizablePanel defaultSize={75}>
                 <div className="flex h-full px-16 py-12">
                   {/* <canvas className="w-full h-full bg-zinc-100" /> */}
-                  <FileViewer />
+                  <Canvas />
                 </div>
               </ResizablePanel>
               {frames.length > 0 ? (

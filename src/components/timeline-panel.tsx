@@ -217,7 +217,7 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
             >
               <div
                 ref={timelineContainerRef}
-                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-zinc-900 cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full  scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-zinc-900 cursor-ew-resize overflow-x-scroll overflow-y-hidden"
               >
                 <canvas ref={canvasRef} />
               </div>
