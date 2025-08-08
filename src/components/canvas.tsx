@@ -11,7 +11,7 @@ import { Images } from "lucide-react";
 const isPlayingAtom = atom<boolean>(false);
 
 // Main App component for the video frame player
-export function FileViewer() {
+export function Canvas() {
   const frames = useAtomValue(framesAtom);
   const currentFrameIndex = useAtomValue(currentFrameIndexAtom);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,6 +105,7 @@ export const ImportModal = () => {
 
     try {
       // Use the FileSystemAccess API to get a directory handle
+      // @ts-ignore
       const dirHandle = await window.showDirectoryPicker();
       if (!dirHandle) {
         // TODO: Show toast
@@ -149,7 +150,7 @@ export const ImportModal = () => {
       } else {
         // setStatus("No image frames found in the selected directory.");
       }
-    } catch (err) {
+    } catch (err: any) {
       if (err.name === "AbortError") {
         // setStatus("Directory selection cancelled.");
       } else {
