@@ -1,6 +1,6 @@
 export const Header = () => {
   return (
-    <header className="bg-zinc-950  text-zinc-300 w-full h-[50px] flex justify-center items-center">
+    <header className="bg-accent text-foreground text-sm font-bold w-full h-[50px] flex justify-start items-center px-6">
       Nur (Alpha)
     </header>
   );

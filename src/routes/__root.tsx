@@ -4,6 +4,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import "../index.css";
+import "@fontsource/albert-sans";
 import { Header } from "@/components/header";
 
 export const Route = createRootRoute({

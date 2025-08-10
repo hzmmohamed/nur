@@ -160,9 +160,10 @@ export const ImportModal = () => {
     }
   }, []);
   return (
-    <div className="bg-zinc-800  w-full flex flex-col  justify-center  gap-4 items-center">
-      <Images size={72} className="text-zinc-600" />
+    <div className="bg-muted  w-full flex flex-col  justify-center  gap-4 items-center">
+      <Images size={72} className="text-muted-foreground" />
       {/* Directory selection button */}
+
       <Button variant={"default"} onClick={selectDirectory}>
         Import Scene
       </Button>

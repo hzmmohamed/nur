@@ -19,12 +19,12 @@ export const TimelinePanel = () => {
   return (
     <ResizablePanel defaultSize={25}>
       <div id="timeline-header" className="flex h-full flex-col">
-        <div className=" bg-zinc-950 w-full h-fit flex flex-row justify-between items-center px-3 py-1">
+        <div className=" bg-background w-full h-fit flex flex-row justify-between items-center px-3 py-1">
           <span className="text-md font-semibold">Timeline</span>
           <div className="flex gap-1">
-            <PlayIcon className="fill-zinc-500 text-zinc-500 cursor-not-allowed size-4" />
-            <PauseIcon className="fill-zinc-500 text-zinc-500 cursor-not-allowed size-4" />
-            <SquareStopIcon className="fill-zinc-500 text-zinc-500 cursor-not-allowed size-4" />
+            <PlayIcon className="fill-muted text-muted cursor-not-allowed size-4" />
+            <PauseIcon className="fill-muted text-muted cursor-not-allowed size-4" />
+            <SquareStopIcon className="fill-muted text-muted cursor-not-allowed size-4" />
           </div>
           <div className="flex gap-1">
             <MenuIcon className="size-4" />
@@ -210,20 +210,20 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
         <Tooltip open={isHovering}>
           <TooltipTrigger asChild>
             <div
-              className="w-full h-full bg-zinc-900 cursor-ew-resize overflow-x-hidden overflow-y-hidden"
+              className="w-full h-full bg-popover cursor-ew-resize overflow-x-hidden overflow-y-hidden"
               onMouseMove={handleMouseMove}
               onMouseDown={handleMouseDown}
               onMouseLeave={handleMouseLeave}
             >
               <div
                 ref={timelineContainerRef}
-                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full  scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-zinc-900 cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full  scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-card cursor-ew-resize overflow-x-scroll overflow-y-hidden"
               >
                 <canvas ref={canvasRef} />
               </div>
             </div>
           </TooltipTrigger>
-          <TooltipContent className="bg-zinc-800 text-zinc-200 p-2 text-xs rounded-md shadow-lg">
+          <TooltipContent className="bg-muted text-popover-foreground p-2 text-xs rounded-md shadow-lg">
             <div>
               <p>Time: {hoverTime.toFixed(2)}s</p>
               <p>Frame: {Math.floor(hoverTime * fps)}</p>
