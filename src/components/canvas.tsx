@@ -1,18 +1,10 @@
 import { useEffect, useRef, useCallback } from "react";
-import { Button } from "./ui/button";
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import {
-  currentFrameIndexAtom,
-  framesAtom,
-  updateCurrentTimeSecondsAtom,
-} from "@/lib/shared-state";
-import { Images } from "lucide-react";
-
-const isPlayingAtom = atom<boolean>(false);
+import { useAtomValue } from "jotai";
+import { currentFrameIndexAtom } from "@/lib/shared-state";
 
 // Main App component for the video frame player
 export function Canvas() {
-  const frames = useAtomValue(framesAtom);
+  const frames = [];
   const currentFrameIndex = useAtomValue(currentFrameIndexAtom);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -77,99 +69,17 @@ export function Canvas() {
     };
   }, [frames]);
 
-  return frames.length > 0 ? (
-    <div className="w-full flex flex-col items-center">
-      {/* Canvas for rendering the video frames */}
+  return (
+    <div className="w-full flex flex-col items-center p-16">
       <div className="relative w-full max-w-full overflow-hidden rounded-lg shadow-xl mb-4">
         <canvas
           ref={canvasRef}
-          className="w-full h-auto bg-black rounded-lg"
-        ></canvas>
+          className="w-full h-auto bg-background rounded-lg"
+        />
       </div>
     </div>
-  ) : (
-    <ImportModal />
   );
 }
-
-export const ImportModal = () => {
-  const setFrames = useSetAtom(framesAtom);
-  const setCurrentTimeMilliseconds = useSetAtom(updateCurrentTimeSecondsAtom);
-  const [_, setIsPlaying] = useAtom(isPlayingAtom);
-
-  // Function to handle the directory selection and load image frames
-  const selectDirectory = useCallback(async () => {
-    setFrames([]);
-    setCurrentTimeMilliseconds(0);
-    setIsPlaying(false);
-
-    try {
-      // Use the FileSystemAccess API to get a directory handle
-      // @ts-ignore
-      const dirHandle = await window.showDirectoryPicker();
-      if (!dirHandle) {
-        // TODO: Show toast
-        // setStatus("Directory selection cancelled.");
-        return;
-      }
-
-      const loadedFrames = [];
-
-      // Iterate over the files in the directory
-      for await (const entry of dirHandle.values()) {
-        if (entry.kind === "file") {
-          // Check for common image file extensions
-          const fileName = entry.name.toLowerCase();
-          if (
-            fileName.endsWith(".jpg") ||
-            fileName.endsWith(".jpeg") ||
-            fileName.endsWith(".png")
-          ) {
-            const file = await entry.getFile();
-            loadedFrames.push(file);
-          }
-        }
-      }
-
-      // Sort frames alphabetically to ensure correct sequence
-      loadedFrames.sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        })
-      );
-
-      // Process files into ImageBitmap for efficient rendering
-      const imageBitmaps = await Promise.all(
-        loadedFrames.map((file) => createImageBitmap(file))
-      );
-
-      setFrames(imageBitmaps);
-      if (imageBitmaps.length > 0) {
-        // setStatus(`Loaded ${imageBitmaps.length} frames.`);
-      } else {
-        // setStatus("No image frames found in the selected directory.");
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        // setStatus("Directory selection cancelled.");
-      } else {
-        console.error("Error selecting directory:", err);
-        // setStatus("An error occurred. Please try again.");
-      }
-    }
-  }, []);
-  return (
-    <div className="bg-muted  w-full flex flex-col  justify-center  gap-4 items-center">
-      <Images size={72} className="text-muted-foreground" />
-      {/* Directory selection button */}
-
-      <Button variant={"default"} onClick={selectDirectory}>
-        Import Scene
-      </Button>
-    </div>
-  );
-};
 
 // {/* Timeline slider and frame counter */}
 // <div className="w-full flex items-center mb-4">
