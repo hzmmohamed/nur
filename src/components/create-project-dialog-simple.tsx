@@ -6,8 +6,7 @@ import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useForm } from "@tanstack/react-form";
 import { Input } from "./ui/input";
 import { z } from "zod/v3";
-import { useNavigate } from "@tanstack/react-router";
-import { myStore } from "@/lib/store";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 
 const defaultValues: {
   height: number;
@@ -25,12 +24,12 @@ export function NewSceneDialogContent() {
   const [isAspectRatioLocked, setIsAspectRatioLocked] = useState(true);
   const [aspectRatio, setAspectRatio] = useState(16 / 9);
   const navigate = useNavigate();
-
+  const { store } = useRouteContext({ from: "__root__" });
   const form = useForm({
     defaultValues,
     onSubmit: async ({ value: { fps, height, name, width } }) => {
       const id = crypto.randomUUID();
-      myStore.setRow("scenes", id, {
+      store.setRow("scenes", id, {
         id,
         name,
         lastUpdatedAt: Date.now(),

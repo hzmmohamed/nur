@@ -8,16 +8,13 @@ import {
   CardFooter,
 } from "./ui/card";
 import { formatDate } from "@/lib/utils";
-import { myStore } from "@/lib/store";
-import { Link } from "@tanstack/react-router";
-import { useRow } from "tinybase/ui-react";
+import { Link, useRouteContext } from "@tanstack/react-router";
+import { MyStoreReact } from "@/lib/store";
 
 export const ProjectCard = ({ sceneId }: { sceneId: string }) => {
-  const { canvasHeight, canvasWidth, fps, lastUpdatedAt, name, id } = useRow(
-    "scenes",
-    sceneId,
-    myStore
-  );
+  const { store } = useRouteContext({ from: "__root__" });
+  const { canvasHeight, canvasWidth, fps, lastUpdatedAt, name } =
+    MyStoreReact.useRow("scenes", sceneId, store);
   return (
     <Link to="/scenes/$id" params={{ id: sceneId as string }}>
       <Card className="overflow-hidden shadow-md transition-transform hover:scale-105">

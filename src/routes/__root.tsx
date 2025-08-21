@@ -1,6 +1,11 @@
 import { ThemeProvider } from "@/components/theme-provider";
 
-import { createRootRoute, Outlet, redirect } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRootRouteWithContext,
+  Outlet,
+  redirect,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import * as UiReact from "tinybase/ui-react/with-schemas";
@@ -24,7 +29,7 @@ import "../index.css";
 import "@fontsource/albert-sans";
 import { Header } from "@/components/header";
 import { scan } from "react-scan";
-import { MyStore } from "@/lib/store";
+import { myStore } from "@/lib/store";
 import { Inspector } from "tinybase/ui-react-inspector";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -44,7 +49,10 @@ const InnerApp = () => {
   );
 };
 
-export const Route = createRootRoute({
+interface MyRouterContext {
+  store: typeof myStore;
+}
+export const Route = createRootRouteWithContext<MyRouterContext>()({
   component: () => {
     return (
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">

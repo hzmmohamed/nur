@@ -5,13 +5,13 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { myStore } from "@/lib/store";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/scenes/$id")({
   component: RouteComponent,
-  loader: async ({ params }) => {
-    const name = myStore.getCell("scenes", params.id, "name");
+
+  loader: async ({ params, context: { store } }) => {
+    const name = store.getCell("scenes", params.id, "name");
     if (!name) throw redirect({ to: "/" });
     return { crumb: name };
   },
