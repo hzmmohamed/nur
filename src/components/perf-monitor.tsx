@@ -1,4 +1,6 @@
+import { MemoryStickIcon } from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 // Main App component for the performance widget.
 export const PerfMonitor = () => {
@@ -31,10 +33,17 @@ export const PerfMonitor = () => {
   }, []); // The empty dependency array ensures this effect runs only once.
 
   return (
-    <div className="flex items-center space-x-2 text-xs">
-      {/* Display memory number and unit */}
-      <span className="text-chart-1 ">Memory Usage</span>
-      <span className="font-semibold text-red-400">{memoryUsage}</span>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex gap-2 items-end text-xs text-muted-foreground">
+          {/* Display memory number and unit */}
+          <span className="font-semibold  text-end">{memoryUsage}</span>
+          <MemoryStickIcon className="h-4 w-4" />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Memory Usage</p>
+      </TooltipContent>
+    </Tooltip>
   );
 };
