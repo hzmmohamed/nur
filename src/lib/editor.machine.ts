@@ -1,6 +1,6 @@
 import { createMachine } from "xstate";
 import { frameFetcherMachine } from "./frame-fetcher.machine";
-import { timelineMachine } from "./timeline-machine";
+// import { timelineMachine } from "./timeline-machine";
 
 export const editorMachine = createMachine({
   types: {
@@ -23,7 +23,7 @@ export const editorMachine = createMachine({
             sceneId,
           }),
         },
-        { src: timelineMachine, id: "timeline", systemId: "timeline" },
+        // { src: timelineMachine, id: "timeline", systemId: "timeline" },
       ],
     },
   },
