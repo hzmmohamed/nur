@@ -1,31 +1,10 @@
 import { ThemeProvider } from "@/components/theme-provider";
 
-import {
-  createRootRoute,
-  createRootRouteWithContext,
-  Outlet,
-  redirect,
-} from "@tanstack/react-router";
+import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
-import * as UiReact from "tinybase/ui-react/with-schemas";
-import { createStore } from "tinybase/with-schemas";
-
-const tablesSchema = { pets: { species: { type: "string" } } } as const;
-const valuesSchema = { employees: { type: "number" } } as const;
-
-// Cast the whole module to be schema-based with WithSchemas:
-const UiReactWithSchemas = UiReact as UiReact.WithSchemas<
-  [typeof tablesSchema, typeof valuesSchema]
->;
-// Deconstruct to access the hooks and components you need:
-const { Provider } = UiReactWithSchemas;
-
-const store = createStore()
-  .setSchema(tablesSchema, valuesSchema)
-  .setTables({ pets: { test: { species: "test" } } });
-
 import "../index.css";
+// @ts-ignore
 import "@fontsource/albert-sans";
 import { Header } from "@/components/header";
 import { scan } from "react-scan";
@@ -34,7 +13,7 @@ import { Inspector } from "tinybase/ui-react-inspector";
 import { Toaster } from "@/components/ui/sonner";
 
 scan({
-  enabled: true,
+  enabled: false,
 });
 
 const InnerApp = () => {
