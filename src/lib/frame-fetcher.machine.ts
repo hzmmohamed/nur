@@ -131,7 +131,6 @@ export const frameFetcherMachine = createMachine(
           RESOLVE: {
             target: "success",
             actions: [
-              () => console.log("resolved"),
               assign({
                 data: ({ event }) => event.data,
               }),
@@ -151,7 +150,6 @@ export const frameFetcherMachine = createMachine(
             }) => {
               const cache = cacheUntyped as LRUCache<string, ImageBitmap>;
               const cachedFrame = cache.get(frameIndex!);
-              console.log(cachedFrame);
               if (cachedFrame) {
                 sendBack({ type: "RESOLVE", data: cachedFrame as ImageBitmap });
                 return;
