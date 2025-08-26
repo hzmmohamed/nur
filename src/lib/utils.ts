@@ -100,3 +100,11 @@ export const convertBitmapsToBase64 = async (
 
   return results;
 };
+
+export function preventKeyBoardScroll(e) {
+  var keys = [32, 33, 34, 35, 37, 38, 39, 40];
+  if (keys.includes(e.keyCode)) {
+    e.preventDefault();
+    return false;
+  }
+}

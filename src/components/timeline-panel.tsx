@@ -10,8 +10,9 @@ import { atom, useAtom } from "jotai";
 import { ResizablePanel } from "./ui/resizable";
 import { MenuIcon } from "lucide-react";
 import { useParams, useRouteContext } from "@tanstack/react-router";
-import { myStore, MyStoreReact } from "@/lib/store";
+import { MyStoreReact } from "@/lib/store";
 import { ImportFramesButton } from "./import-frames-dialog";
+import { preventKeyBoardScroll } from "@/lib/utils";
 
 const zoomLevelAtom = atom<number>(1);
 export const TimelinePanel = () => {
@@ -239,10 +240,12 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
               onMouseMove={handleMouseMove}
               onMouseDown={handleMouseDown}
               onMouseLeave={handleMouseLeave}
+              onKeyDown={preventKeyBoardScroll}
             >
               <div
                 ref={timelineContainerRef}
-                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-card cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                className="ml-4 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-card cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                onKeyDown={preventKeyBoardScroll}
               >
                 <canvas ref={canvasRef} />
               </div>
