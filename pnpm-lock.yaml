@@ -11,6 +11,9 @@ importers:
       '@fontsource/albert-sans':
         specifier: ^5.2.6
         version: 5.2.6
+      '@keybindy/core':
+        specifier: ^1.1.7
+        version: 1.1.7(typescript@5.8.3)
       '@radix-ui/react-avatar':
         specifier: ^1.1.10
         version: 1.1.10(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -738,6 +741,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.29':
     resolution: {integrity: sha512-uw6guiW/gcAGPDhLmd77/6lW8QLeiV5RUTsAX46Db6oLhGaVj4lhnPwb184s1bkc8kdVg/+h988dro8GRDpmYQ==}
+
+  '@keybindy/core@1.1.7':
+    resolution: {integrity: sha512-IXcPAb5CIlPVVDQcsoir1m7OaJvfboWwYftQukYT87EZkKV2VNZVjPLCsUp5/eJBzq7FuMNMj22vM9UPOFTO7w==}
+    peerDependencies:
+      typescript: ^5.0.0
 
   '@manypkg/find-root@2.2.3':
     resolution: {integrity: sha512-jtEZKczWTueJYHjGpxU3KJQ08Gsrf4r6Q2GjmPp/RGk5leeYAA1eyDADSAF+KVCsQ6EwZd/FMcOFCoMhtqdCtQ==}
@@ -3291,6 +3299,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.4
+
+  '@keybindy/core@1.1.7(typescript@5.8.3)':
+    dependencies:
+      typescript: 5.8.3
 
   '@manypkg/find-root@2.2.3':
     dependencies:
