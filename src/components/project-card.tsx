@@ -10,10 +10,11 @@ import {
 import { formatDate } from "@/lib/utils";
 import { Link, useRouteContext } from "@tanstack/react-router";
 import { MyStoreReact } from "@/lib/store";
+import { Badge } from "./ui/badge";
 
 export const ProjectCard = ({ sceneId }: { sceneId: string }) => {
   const { store } = useRouteContext({ from: "__root__" });
-  const { canvasHeight, canvasWidth, fps, lastUpdatedAt, name } =
+  const { canvasHeight, canvasWidth, fps, lastUpdatedAt, name, framesCount } =
     MyStoreReact.useRow("scenes", sceneId, store);
   return (
     <Link to="/scenes/$id" params={{ id: sceneId as string }}>
@@ -25,8 +26,16 @@ export const ProjectCard = ({ sceneId }: { sceneId: string }) => {
       /> */}
         <CardContent className="p-4">
           <CardTitle className="text-lg font-semibold">{name}</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground mt-1">
-            {canvasWidth} x {canvasHeight} | {fps} FPS
+          <CardDescription className="text-sm text-muted-foreground mt-1 flex flex-col gap-2">
+            <p>
+              {canvasWidth} x {canvasHeight} | {framesCount} frames
+            </p>
+            <div className="flex gap-2">
+              <span className="font-bold">
+                {Math.floor((framesCount || 0) / fps)}s
+              </span>
+              <Badge variant={"secondary"}>{fps} fps</Badge>
+            </div>
           </CardDescription>
         </CardContent>
         <CardFooter className="flex justify-between items-center p-4 pt-0 text-xs text-muted-foreground">

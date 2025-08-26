@@ -1,38 +1,42 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import {
-  fpsAtom,
-  timelineLengthSecondsAtom,
-  updateCurrentTimeSecondsAtom,
-} from "@/lib/shared-state";
-import { atom, useAtom, useAtomValue } from "jotai";
+import { updateCurrentTimeSecondsAtom } from "@/lib/shared-state";
+import { atom, useAtom } from "jotai";
 import { ResizablePanel } from "./ui/resizable";
-import { MenuIcon, PauseIcon, PlayIcon, SquareStopIcon } from "lucide-react";
+import { MenuIcon } from "lucide-react";
+import { useParams, useRouteContext } from "@tanstack/react-router";
+import { myStore, MyStoreReact } from "@/lib/store";
+import { ImportFramesButton } from "./import-frames-dialog";
 
 const zoomLevelAtom = atom<number>(1);
 export const TimelinePanel = () => {
+  const framesFetcherActorRef = useRouteContext({
+    from: "/scenes/$id",
+    select: ({ frameFetcher }) => frameFetcher,
+  });
+
   return (
     <ResizablePanel defaultSize={25}>
       <div id="timeline-header" className="flex h-full flex-col">
-        <div className=" bg-background w-full h-fit flex flex-row justify-between items-center px-3 py-1">
+        <div className=" bg-background w-full h-16 flex flex-row justify-between items-center px-3 py-1">
           <span className="text-md font-semibold">Timeline</span>
-          <div className="flex gap-1">
-            <PlayIcon className="fill-muted text-muted cursor-not-allowed size-4" />
-            <PauseIcon className="fill-muted text-muted cursor-not-allowed size-4" />
-            <SquareStopIcon className="fill-muted text-muted cursor-not-allowed size-4" />
-          </div>
-          <div className="flex gap-1">
+          <div className="flex gap-2 items-center">
+            <ImportFramesButton size={"sm"} variant="secondary" />
             <MenuIcon className="size-4" />
           </div>
         </div>
         <Timeline
           onScrub={(frame: number) => {
             console.log(`Scrubbed to frame: ${frame}`);
+            framesFetcherActorRef.send({
+              type: "FETCH_FRAME",
+              key: frame,
+            });
           }}
         />
       </div>
@@ -41,6 +45,10 @@ export const TimelinePanel = () => {
 };
 
 const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
+  const { id } = useParams({ from: "/scenes/$id" });
+  const { fps, framesCount } = MyStoreReact.useRow("scenes", id, myStore);
+  const timelineLengthSeconds = (framesCount as number) / fps;
+
   // State for the current playback time in seconds
   const [currentTime, setCurrentTime] = useAtom(updateCurrentTimeSecondsAtom);
   // State for the time shown in the tooltip on hover
@@ -51,8 +59,6 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
   const [isScrubbing, setIsScrubbing] = useState(false);
   // State for the current zoom level, affecting the timeline's width
   const [zoomLevel, setZoomLevel] = useAtom(zoomLevelAtom);
-  const timelineLengthSeconds = useAtomValue(timelineLengthSecondsAtom);
-  const fps = useAtomValue(fpsAtom);
 
   // Refs for the canvas element and its 2D drawing context
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,7 +86,6 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
 
     // Function to draw the timeline elements
     const drawTimeline = () => {
-      console.log("Drawing timeline", canvas.width, timelineLengthSeconds);
       const barHeight = timelineHeight;
       const barOffset = 24;
       // Draw background
@@ -152,7 +157,6 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
     if (e.button === 0) {
       setIsScrubbing(true);
       const newTime = positionToTime(e.clientX);
-      console.log("time:", newTime);
 
       setCurrentTime(newTime);
       if (onScrub) {
@@ -168,6 +172,26 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
   const handleMouseLeave = () => {
     setIsHovering(false);
   };
+
+  const handleKeyboardNavigateTimeline = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") {
+        setCurrentTime(currentTime + 1 / fps);
+        onScrub(Math.floor((currentTime + 1 / fps) * fps));
+      }
+      if (event.key === "ArrowLeft") {
+        setCurrentTime(currentTime - 1 / fps);
+        onScrub(Math.floor((currentTime - 1 / fps) * fps));
+      }
+    },
+    [currentTime, setCurrentTime, onScrub, fps]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyboardNavigateTimeline);
+    return () =>
+      window.removeEventListener("keydown", handleKeyboardNavigateTimeline);
+  }, [handleKeyboardNavigateTimeline]);
 
   // Attach and clean up global mouse event listeners for scrubbing and wheel events
   useEffect(() => {

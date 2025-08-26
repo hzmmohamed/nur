@@ -13,7 +13,7 @@ const TABLES_SCHEMA = {
   scenes: {
     id: { type: "string" },
     name: { type: "string" },
-    framesCount: { type: "number" },
+    framesCount: { type: "number", default: 0 },
     fps: { type: "number", default: 24 },
     canvasWidth: { type: "number", default: 1920 },
     canvasHeight: { type: "number", default: 1080 },
@@ -25,8 +25,7 @@ type Schemas = [typeof TABLES_SCHEMA, typeof VALUES_SCHEMA];
 export const MyStoreReact = UiReact as UiReact.WithSchemas<Schemas>;
 
 // Destructure the ui-react module with the schema applied.
-const { useCreateStore, useProvideStore, useCreatePersister } =
-  UiReact as UiReact.WithSchemas<Schemas>;
+const { useProvideStore } = UiReact as UiReact.WithSchemas<Schemas>;
 
 export const myStore = createStore().setSchema(TABLES_SCHEMA, VALUES_SCHEMA);
 export const myStorePersister = createIndexedDbPersister(myStore, "nur");

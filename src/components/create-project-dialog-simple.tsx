@@ -35,7 +35,7 @@ export function NewSceneDialogContent() {
         lastUpdatedAt: Date.now(),
         canvasHeight: height,
         canvasWidth: width,
-        framesCount: 100,
+        framesCount: 0,
         fps,
       });
       navigate({ to: "/scenes/$id", params: { id } });
@@ -114,7 +114,6 @@ export function NewSceneDialogContent() {
               name="width"
               listeners={{
                 onChange: () => {
-                  setFrames([]);
                   if (isAspectRatioLocked) {
                     const newHeight = Math.round(
                       form.state.values.width / aspectRatio
@@ -140,7 +139,6 @@ export function NewSceneDialogContent() {
               name="height"
               listeners={{
                 onChange: () => {
-                  setFrames([]);
                   if (isAspectRatioLocked) {
                     const newWidth = Math.round(
                       form.state.values.height * aspectRatio

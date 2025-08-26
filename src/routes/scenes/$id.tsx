@@ -5,11 +5,32 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import { createActor, type ActorRefFromLogic } from "xstate";
+
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { editorMachine } from "@/lib/editor.machine";
+import type { frameFetcherMachine } from "@/lib/frame-fetcher.machine";
+// import type { timelineMachine } from "@/lib/timeline-machine";
 
 export const Route = createFileRoute("/scenes/$id")({
   component: RouteComponent,
-
+  context: ({ params }) => {
+    // TODO: Pass scene id and cache size
+    const editorActor = createActor(editorMachine, {
+      input: {
+        sceneId: params.id,
+      },
+    });
+    editorActor.start();
+    return {
+      frameFetcher: editorActor.system.get(
+        "frame-fetcher"
+      ) as ActorRefFromLogic<typeof frameFetcherMachine>,
+      // timelineActor: editorActor.system.get("timeline") as ActorRefFromLogic<
+      //   typeof timelineMachine
+      // >,
+    };
+  },
   loader: async ({ params, context: { store } }) => {
     const name = store.getCell("scenes", params.id, "name");
     if (!name) throw redirect({ to: "/" });
@@ -17,13 +38,10 @@ export const Route = createFileRoute("/scenes/$id")({
   },
 });
 
-export function ResizableDemo() {
+function RouteComponent() {
   return (
-    <ResizablePanelGroup
-      direction="horizontal"
-      className="max-w-md rounded-lg border md:min-w-[450px]"
-    >
-      <ResizablePanel defaultSize={50}>
+    <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+      <ResizablePanel defaultSize={80}>
         <ResizablePanelGroup direction="vertical">
           <ResizablePanel
             defaultSize={75}
@@ -31,47 +49,16 @@ export function ResizableDemo() {
           >
             <Canvas />
           </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel defaultSize={75}>
-            <div className="flex h-full items-center justify-center p-6">
-              <span className="font-semibold">Three</span>
-            </div>
-          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <TimelinePanel />
         </ResizablePanelGroup>
       </ResizablePanel>
-      <ResizablePanel defaultSize={50}>
-        <div className="flex h-[200px] items-center justify-center p-6">
-          <span className="font-semibold">One</span>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={20}>
+        <div className="flex h-full items-center justify-center p-6 bg-card">
+          <span className="font-semibold">Tools Sidebar</span>
         </div>
       </ResizablePanel>
-      <ResizableHandle />
     </ResizablePanelGroup>
-  );
-}
-
-function RouteComponent() {
-  return (
-    <>
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-        <ResizablePanel defaultSize={80}>
-          <ResizablePanelGroup direction="vertical">
-            <ResizablePanel
-              defaultSize={75}
-              className="flex items-center justify-center"
-            >
-              <Canvas />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <TimelinePanel />
-          </ResizablePanelGroup>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={20}>
-          <div className="flex h-full items-center justify-center p-6 bg-card">
-            <span className="font-semibold">Tools Sidebar</span>
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </>
   );
 }

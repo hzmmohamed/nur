@@ -4,8 +4,7 @@ import { useState } from "react";
 import { ProjectCard } from "@/components/project-card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { myStore } from "@/lib/store";
-import { useRowIds } from "tinybase/ui-react";
+import { myStore, MyStoreReact } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -14,8 +13,7 @@ export const Route = createFileRoute("/")({
 // Main App component which acts as the Home Page
 export default function Index() {
   const [isOpen, setIsOpen] = useState(false);
-  const sceneIds = useRowIds("scenes", myStore);
-  console.log(sceneIds);
+  const sceneIds = MyStoreReact.useRowIds("scenes", myStore);
   return (
     <div className="p-8 px-36 text-foreground">
       {/* Header section with title and button */}
@@ -23,7 +21,6 @@ export default function Index() {
         <h1 className="text-4xl font-bold tracking-tight text-foreground">
           Scenes
         </h1>
-        {/* <IDBTest /> */}
 
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
