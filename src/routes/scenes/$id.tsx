@@ -7,10 +7,17 @@ import {
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { editorMachine } from "@/lib/editor.machine";
-import { useActorRef } from "@xstate/react";
+import { useSelector } from "@xstate/react";
 import { useRef, useEffect } from "react";
 import { createActor, type ActorRefFromLogic } from "xstate";
 import type { frameFetcherMachine } from "@/lib/frame-fetcher.machine";
+import { Button } from "@/components/ui/button";
+import { PenToolIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 // import type { timelineMachine } from "@/lib/timeline-machine";
 
 export const Route = createFileRoute("/scenes/$id")({
@@ -64,23 +71,14 @@ function RouteComponent() {
         <ResizablePanelGroup direction="vertical">
           <ResizablePanel
             defaultSize={75}
-            className="flex items-center justify-center"
+            className="flex items-center justify-center relative"
           >
-            <div className="w-full h-full relative">
-              <div
-                ref={containerRef}
-                id="nur-canvas"
-                className="w-full h-full overflow-hidden"
-              >
-                {/* We no longer need this div because the Konva Stage is initialized with a direct container reference */}
-                {/* Display current scale and position for debugging/user feedback */}
-              </div>
-              {/* <div className="absolute top-4 left-4 bg-card text-card-foreground text-xs p-2 rounded-sm opacity-75">
-                <p>Scale: {stageScale.toFixed(2)}</p>
-                <p>X: {stageX.toFixed(2)}</p>
-                <p>Y: {stageY.toFixed(2)}</p>
-              </div> */}
-            </div>
+            <Toolbar />
+            <div
+              ref={containerRef}
+              id="nur-canvas"
+              className="w-full h-full overflow-hidden"
+            />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <TimelinePanel />
@@ -95,3 +93,32 @@ function RouteComponent() {
     </ResizablePanelGroup>
   );
 }
+
+const Toolbar = () => {
+  const editorActorRef = Route.useRouteContext().editorActor;
+  const isPentoolActive = useSelector(editorActorRef, (snapshot) =>
+    snapshot.matches({ active: { mode: "editing" } })
+  );
+
+  return (
+    <div className="absolute top-2 left-2 flex gap-2 bg-card p-1 z-10 rounded-sm">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => editorActorRef.send({ type: "NEW_SHAPE" })}
+            className={
+              isPentoolActive ? "bg-accent text-accent-foreground" : ""
+            }
+          >
+            <PenToolIcon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Pen Tool (P)</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+};

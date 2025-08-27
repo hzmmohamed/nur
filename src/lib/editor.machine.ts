@@ -7,7 +7,7 @@ import {
 import { frameFetcherMachine } from "./frame-fetcher.machine";
 import Konva from "konva";
 import ShortcutManager from "@keybindy/core";
-// import { timelineMachine } from "./timeline-machine";
+import { bezierPenToolMachine } from "./pen-tool.machine";
 
 type Context = {
   fps: number;
@@ -59,14 +59,13 @@ export const editorMachine = createMachine({
             }),
             ({ context }) => {
               context.stageRef?.add(context.layers.currentFrame);
-              context.stageRef?.add(context.layers.currentFrame);
+              context.stageRef?.add(context.layers.currentMask);
             },
           ],
         },
       },
     },
     active: {
-      type: "parallel",
       invoke: [
         {
           input: ({ context }) => ({ layerRef: context.layers.currentFrame }),
@@ -109,7 +108,6 @@ export const editorMachine = createMachine({
                 event.evt.preventDefault();
                 const oldScale = stageRef.scaleX();
                 const pointer = stageRef.getPointerPosition();
-                console.log(pointer);
                 if (pointer) {
                   const zoomFactor = event.evt.deltaY > 0 ? 0.9 : 1.1;
                   const newScale = Math.max(
@@ -139,9 +137,9 @@ export const editorMachine = createMachine({
           ),
         },
       ],
+      type: "parallel",
       states: {
-        mode: {
-          initial: "drawing",
+        panning: {
           invoke: {
             input: ({ context }) => ({ ...context }),
             id: "shortcut-handler",
@@ -165,19 +163,19 @@ export const editorMachine = createMachine({
               return () => shortcutManager.disableAll();
             }),
           },
+          initial: "inactive",
           states: {
-            drawing: {
+            inactive: {
               on: {
-                PANNING_MODE_ENABLED: "panning",
+                PANNING_MODE_ENABLED: "active",
               },
             },
-            panning: {
+            active: {
               on: {
-                PANNING_MODE_DISABLED: "drawing",
+                PANNING_MODE_DISABLED: "inactive",
               },
               entry: ({ context }) => {
                 if (context.stageRef) {
-                  console.log("panning");
                   context.stageRef.draggable(true);
                   context.stageRef.container().style.cursor = "grab";
                 }
@@ -187,6 +185,27 @@ export const editorMachine = createMachine({
                   context.stageRef.draggable(false);
                   context.stageRef.container().style.cursor = "auto";
                 }
+              },
+            },
+          },
+        },
+        mode: {
+          initial: "idle",
+          states: {
+            idle: {
+              on: {
+                NEW_SHAPE: "editing",
+              },
+            },
+            editing: {
+              invoke: {
+                src: bezierPenToolMachine,
+                input: ({ context }) => ({
+                  layerRef: context.layers.currentMask,
+                }),
+                onDone: {
+                  actions: ({ event: { output } }) => console.log(output.curve),
+                },
               },
             },
           },
