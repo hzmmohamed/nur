@@ -4,7 +4,7 @@ import { createIndexedDbPersister } from "tinybase/persisters/persister-indexed-
 import * as UiReact from "tinybase/ui-react/with-schemas";
 
 // A unique Id for this Store.
-export const STORE_ID = "myStore";
+export const STORE_ID = "scenes-store";
 
 // The schema for this Store.
 const VALUES_SCHEMA = {} as const;
@@ -22,10 +22,16 @@ const TABLES_SCHEMA = {
 } as const;
 type Schemas = [typeof TABLES_SCHEMA, typeof VALUES_SCHEMA];
 
-export const MyStoreReact = UiReact as UiReact.WithSchemas<Schemas>;
+export const SceneStoreReact = UiReact as UiReact.WithSchemas<Schemas>;
 
 // Destructure the ui-react module with the schema applied.
-export const myStore = createStore().setSchema(TABLES_SCHEMA, VALUES_SCHEMA);
-export const myStorePersister = createIndexedDbPersister(myStore, "nur");
-await myStorePersister.load();
-myStorePersister.startAutoPersisting();
+export const scenesStore = createStore().setSchema(
+  TABLES_SCHEMA,
+  VALUES_SCHEMA
+);
+export const scenesStorePersister = createIndexedDbPersister(
+  scenesStore,
+  "nur"
+);
+await scenesStorePersister.load();
+scenesStorePersister.startAutoPersisting();

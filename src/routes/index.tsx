@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ProjectCard } from "@/components/project-card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { myStore, MyStoreReact } from "@/lib/store";
+import { scenesStore, SceneStoreReact } from "@/lib/scenes.store";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
 // Main App component which acts as the Home Page
 export default function Index() {
   const [isOpen, setIsOpen] = useState(false);
-  const sceneIds = MyStoreReact.useRowIds("scenes", myStore);
+  const sceneIds = SceneStoreReact.useRowIds("scenes", scenesStore);
   return (
     <div className="p-8 px-36 text-foreground">
       {/* Header section with title and button */}

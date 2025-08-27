@@ -8,7 +8,7 @@ import "../index.css";
 import "@fontsource/albert-sans";
 import { Header } from "@/components/header";
 import { scan } from "react-scan";
-import { myStore } from "@/lib/store";
+import { scenesStore } from "@/lib/scenes.store";
 import { Inspector } from "tinybase/ui-react-inspector";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -29,7 +29,7 @@ const InnerApp = () => {
 };
 
 interface MyRouterContext {
-  store: typeof myStore;
+  store: typeof scenesStore;
 }
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   component: () => {

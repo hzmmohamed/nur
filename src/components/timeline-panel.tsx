@@ -10,7 +10,7 @@ import { atom, useAtom } from "jotai";
 import { ResizablePanel } from "./ui/resizable";
 import { MenuIcon } from "lucide-react";
 import { useParams, useRouteContext } from "@tanstack/react-router";
-import { MyStoreReact } from "@/lib/store";
+import { SceneStoreReact } from "@/lib/scenes.store";
 import { ImportFramesButton } from "./import-frames-dialog";
 import { preventKeyBoardScroll } from "@/lib/utils";
 
@@ -48,7 +48,7 @@ export const TimelinePanel = () => {
 const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
   const { id } = useParams({ from: "/scenes/$id" });
   const { store } = useRouteContext({ from: "__root__" });
-  const { fps, framesCount } = MyStoreReact.useRow("scenes", id, store);
+  const { fps, framesCount } = SceneStoreReact.useRow("scenes", id, store);
   const timelineLengthSeconds = (framesCount as number) / fps;
 
   // State for the current playback time in seconds
