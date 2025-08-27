@@ -7,6 +7,9 @@ import { comlink } from "vite-plugin-comlink";
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ["y-indexeddb"],
+  },
   plugins: [
     comlink(),
     tailwindcss(),

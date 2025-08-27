@@ -855,7 +855,7 @@ export const bezierPenToolMachine = createMachine(
 );
 
 // Generate SVG path data from points
-function generateSVGPath(points: BezierPoint[]) {
+export function generateSVGPath(points: BezierPoint[]) {
   if (!points.length) return "";
 
   let path = "";

@@ -107,9 +107,11 @@ const Toolbar = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => editorActorRef.send({ type: "NEW_SHAPE" })}
+            onClick={() => editorActorRef.send({ type: "TOGGLE_PEN" })}
             className={
-              isPentoolActive ? "bg-accent text-accent-foreground" : ""
+              isPentoolActive
+                ? "bg-accent-foreground text-accent hover:bg-accent-foreground hover:text-accent"
+                : ""
             }
           >
             <PenToolIcon />

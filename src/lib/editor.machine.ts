@@ -7,7 +7,8 @@ import {
 import { frameFetcherMachine } from "./frame-fetcher.machine";
 import Konva from "konva";
 import ShortcutManager from "@keybindy/core";
-import { bezierPenToolMachine } from "./pen-tool.machine";
+import { bezierPenToolMachine, generateSVGPath } from "./pen-tool.machine";
+import VectorDocument from "./masks.store";
 
 type Context = {
   fps: number;
@@ -15,6 +16,7 @@ type Context = {
   stageRef: Konva.Stage | null;
   shortcutManager: ShortcutManager;
   layers: Record<string, Konva.Layer>;
+  masksDocument: VectorDocument;
 };
 export const editorMachine = createMachine({
   types: {
@@ -29,7 +31,9 @@ export const editorMachine = createMachine({
     layers: {
       currentFrame: new Konva.Layer({ id: "current-frame" }),
       currentMask: new Konva.Layer({ id: "current-mask" }),
+      masks: new Konva.Layer({ id: "masks" }),
     },
+    masksDocument: new VectorDocument(`masks-${sceneId}`),
   }),
   initial: "loading",
   invoke: [
@@ -60,6 +64,9 @@ export const editorMachine = createMachine({
             ({ context }) => {
               context.stageRef?.add(context.layers.currentFrame);
               context.stageRef?.add(context.layers.currentMask);
+
+              context.masksDocument.createLayer("test");
+              context.stageRef?.add(context.layers.masks);
             },
           ],
         },
@@ -95,6 +102,39 @@ export const editorMachine = createMachine({
               });
             }
           ),
+        },
+        {
+          input: ({ context: { masksDocument, layers } }) => ({
+            masksDocument,
+            layerRef: layers.masks,
+          }),
+          id: "masks-renderer",
+          src: fromCallback<
+            { type: "" },
+            Pick<Context, "masksDocument"> & { layerRef: Konva.Layer }
+          >(({ input: { layerRef, masksDocument } }) => {
+            const drawCurves = (curves) => {
+              layerRef.destroyChildren();
+              curves?.forEach((c) => {
+                layerRef.add(
+                  new Konva.Path({
+                    data: generateSVGPath(c.toJSON()),
+                    stroke: "oklch(0.9247 0.1 66.1732)",
+                    fillEnabled: true,
+                    fill: "oklch(0.9247 0.0524 66.1732)",
+                    strokeWidth: 1,
+                    opacity: 0.6,
+                  })
+                );
+              });
+              layerRef.batchDraw();
+            };
+            drawCurves(masksDocument.getLayer("test")?.get("curves"));
+            masksDocument.observeCurves("test", (curves) => {
+              console.log(curves);
+              drawCurves(curves.target);
+            });
+          }),
         },
         {
           input: ({ context }) => ({ ...context }),
@@ -194,17 +234,29 @@ export const editorMachine = createMachine({
           states: {
             idle: {
               on: {
-                NEW_SHAPE: "editing",
+                TOGGLE_PEN: "editing",
               },
             },
             editing: {
+              on: {
+                TOGGLE_PEN: "idle",
+              },
+              exit: ({ context }) => {
+                context.layers.currentMask.destroyChildren();
+              },
               invoke: {
                 src: bezierPenToolMachine,
                 input: ({ context }) => ({
                   layerRef: context.layers.currentMask,
                 }),
                 onDone: {
-                  actions: ({ event: { output } }) => console.log(output.curve),
+                  target: "idle",
+                  actions: [
+                    ({ event: { output }, context }) => {
+                      context.masksDocument.createCurve("test", output.curve);
+                      context.masksDocument.save();
+                    },
+                  ],
                 },
               },
             },
