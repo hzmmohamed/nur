@@ -274,7 +274,7 @@ export const bezierPenToolMachine = createMachine(
           });
 
           stage.on("mousemove", () => {
-            const pos = stage.getPointerPosition();
+            const pos = stage.getRelativePointerPosition();
             sendBack({ type: "MOUSE_MOVE", x: pos.x, y: pos.y });
           });
 
@@ -283,7 +283,7 @@ export const bezierPenToolMachine = createMachine(
           });
 
           stage.on("mousedown", () => {
-            const pos = stage.getPointerPosition();
+            const pos = stage.getRelativePointerPosition();
             if (self._parent?.getSnapshot().matches("drawing")) {
               sendBack({ type: "MOUSE_DOWN", x: pos.x, y: pos.y });
             } else {
