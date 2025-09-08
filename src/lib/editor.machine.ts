@@ -1,6 +1,7 @@
 import {
   assign,
   createMachine,
+  forwardTo,
   fromCallback,
   type ActorRefFromLogic,
 } from "xstate";
@@ -18,10 +19,59 @@ type Context = {
   layers: Record<string, Konva.Layer>;
   masksDocument: VectorDocument;
 };
+
+const zoomHandlerSubscriber = fromCallback<
+  { type: "" },
+  Pick<Context, "stageRef">
+>(({ input: { stageRef }, sendBack }) => {
+  if (!stageRef) return;
+  const handleZoom: Konva.KonvaEventListener<Konva.Stage, WheelEvent> = (
+    event
+  ) => {
+    event.evt.preventDefault();
+    const oldScale = stageRef.scaleX();
+    const pointer = stageRef.getPointerPosition();
+    if (pointer) {
+      const zoomFactor = event.evt.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.max(0.1, Math.min(oldScale * zoomFactor, 10));
+      const newPos = {
+        x: pointer.x - ((pointer.x - stageRef.x()) * newScale) / oldScale,
+        y: pointer.y - ((pointer.y - stageRef.y()) * newScale) / oldScale,
+      };
+      stageRef.scale({ x: newScale, y: newScale });
+      stageRef.position({ x: newPos.x, y: newPos.y });
+      // updateGrid();
+      stageRef.batchDraw(); // Optimize by redrawing all layers at once
+
+      // Send back scale change event
+      sendBack({ type: "ZOOM_CHANGE" });
+    }
+  };
+  stageRef.on("wheel", handleZoom);
+  return () => {
+    // Clean up event listeners and destroy the stageRef
+    stageRef.off("wheel", handleZoom);
+  };
+});
+
 export const editorMachine = createMachine({
   types: {
     input: {} as { sceneId: string },
     context: {} as Context,
+    events: {} as
+      | {
+          type: "ZOOM_CHANGED";
+          data: {
+            newScale: number;
+          };
+        }
+      | {
+          type:
+            | "CONTAINER_MOUNTED"
+            | "TOGGLE_PEN"
+            | "PANNING_MODE_ENABLED"
+            | "PANNING_MODE_DISABLED";
+        },
   },
   context: ({ input: { sceneId } }) => ({
     fps: 24,
@@ -139,42 +189,7 @@ export const editorMachine = createMachine({
         {
           input: ({ context }) => ({ ...context }),
           id: "zoom-handler",
-          src: fromCallback<{ type: "" }, Context>(
-            ({ input: { stageRef } }) => {
-              const handleZoom: Konva.KonvaEventListener<
-                Konva.Stage,
-                WheelEvent
-              > = (event) => {
-                event.evt.preventDefault();
-                const oldScale = stageRef.scaleX();
-                const pointer = stageRef.getPointerPosition();
-                if (pointer) {
-                  const zoomFactor = event.evt.deltaY > 0 ? 0.9 : 1.1;
-                  const newScale = Math.max(
-                    0.1,
-                    Math.min(oldScale * zoomFactor, 10)
-                  );
-                  const newPos = {
-                    x:
-                      pointer.x -
-                      ((pointer.x - stageRef.x()) * newScale) / oldScale,
-                    y:
-                      pointer.y -
-                      ((pointer.y - stageRef.y()) * newScale) / oldScale,
-                  };
-                  stageRef.scale({ x: newScale, y: newScale });
-                  stageRef.position({ x: newPos.x, y: newPos.y });
-                  // updateGrid();
-                  stageRef.batchDraw(); // Optimize by redrawing all layers at once
-                }
-              };
-              stageRef.on("wheel", handleZoom);
-              return () => {
-                // Clean up event listeners and destroy the stageRef
-                stageRef.off("wheel", handleZoom);
-              };
-            }
-          ),
+          src: zoomHandlerSubscriber,
         },
       ],
       type: "parallel",
@@ -240,12 +255,18 @@ export const editorMachine = createMachine({
             editing: {
               on: {
                 TOGGLE_PEN: "idle",
+                ZOOM_CHANGED: {
+                  actions: [
+                    forwardTo(({ system }) => system.get("bezier-machine")),
+                  ],
+                },
               },
               exit: ({ context }) => {
                 context.layers.currentMask.destroyChildren();
               },
               invoke: {
                 src: bezierPenToolMachine,
+                id: "bezier-machine",
                 input: ({ context }) => ({
                   layerRef: context.layers.currentMask,
                 }),
@@ -266,7 +287,6 @@ export const editorMachine = createMachine({
     },
   },
 });
-
 // type Context = {
 //   timelinector: AnyActorRef;
 //   frameFetcherActor: AnyActorRef;
