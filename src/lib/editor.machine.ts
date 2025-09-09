@@ -3,12 +3,14 @@ import {
   createMachine,
   forwardTo,
   fromCallback,
+  sendTo,
   type ActorRefFromLogic,
 } from "xstate";
 import { frameFetcherMachine } from "./frame-fetcher.machine";
 import Konva from "konva";
 import ShortcutManager from "@keybindy/core";
-import { bezierPenToolMachine, generateSVGPath } from "./pen-tool.machine";
+import { generateSVGPath } from "./utils";
+import { penToolMachine } from "./pen-tool/pen-tool-machine";
 import VectorDocument from "./masks.store";
 
 type Context = {
@@ -256,17 +258,22 @@ export const editorMachine = createMachine({
               on: {
                 TOGGLE_PEN: "idle",
                 ZOOM_CHANGED: {
-                  actions: [
-                    forwardTo(({ system }) => system.get("bezier-machine")),
-                  ],
+                  actions: [forwardTo("bezier-machine")],
+                },
+                PANNING_MODE_ENABLED: {
+                  actions: [sendTo("bezier-machine", { type: "PAUSE" })],
+                },
+                PANNING_MODE_DISABLED: {
+                  actions: [sendTo("bezier-machine", { type: "RESUME" })],
                 },
               },
               exit: ({ context }) => {
                 context.layers.currentMask.destroyChildren();
               },
               invoke: {
-                src: bezierPenToolMachine,
+                src: penToolMachine,
                 id: "bezier-machine",
+                systemId: "bezier-machine",
                 input: ({ context }) => ({
                   layerRef: context.layers.currentMask,
                 }),
@@ -274,8 +281,10 @@ export const editorMachine = createMachine({
                   target: "idle",
                   actions: [
                     ({ event: { output }, context }) => {
-                      context.masksDocument.createCurve("test", output.curve);
-                      context.masksDocument.save();
+                      if (output.curve.length) {
+                        context.masksDocument.createCurve("test", output.curve);
+                        context.masksDocument.save();
+                      }
                     },
                   ],
                 },
