@@ -197,29 +197,85 @@ export const editorMachine = createMachine({
       type: "parallel",
       states: {
         panning: {
-          invoke: {
-            input: ({ context }) => ({ ...context }),
-            id: "shortcut-handler",
-            src: fromCallback<
-              { type: "" },
-              { shortcutManager: ShortcutManager }
-            >(({ input: { shortcutManager }, sendBack }) => {
-              shortcutManager.register(
-                ["Space"],
-                (e) => {
-                  if (e.type === "keydown") {
-                    sendBack({ type: "PANNING_MODE_ENABLED" });
-                  } else {
-                    sendBack({ type: "PANNING_MODE_DISABLED" });
-                  }
-                },
-                { preventDefault: true, hold: true }
-              );
-              shortcutManager.start();
+          invoke: [
+            {
+              input: ({ context }) => ({ ...context }),
+              id: "mouse-middle-button-pan-handler",
+              systemId: "mouse-middle-button-pan-handler",
+              src: fromCallback<{ type: "" }, Pick<Context, "stageRef">>(
+                ({ input: { stageRef }, sendBack }) => {
+                  if (!stageRef) return;
+                  // Handle mouse down event
+                  stageRef.on("mousedown", function (e) {
+                    // Check if middle mouse button (button 1) is pressed
+                    if (e.evt.button === 1) {
+                      e.evt.preventDefault();
+                      sendBack({ type: "PANNING_MODE_ENABLED" });
+                    }
+                  });
 
-              return () => shortcutManager.disableAll();
-            }),
-          },
+                  // Handle mouse up event
+                  stageRef.on("mouseup", function (e) {
+                    if (e.evt.button === 1) {
+                      sendBack({ type: "PANNING_MODE_DISABLED" });
+                    }
+                  });
+
+                  // Handle mouse leave event (stop dragging if mouse leaves stage)
+                  stageRef.on("mouseleave", function () {
+                    sendBack({ type: "PANNING_MODE_DISABLED" });
+                  });
+
+                  // Optional: Handle drag events for additional functionality
+                  stageRef.on("dragstart", function () {
+                    console.log("Stage drag started");
+                  });
+
+                  stageRef.on("dragend", function () {
+                    sendBack({ type: "PANNING_MODE_DISABLED" });
+                  });
+
+                  // Optional: Handle context menu to prevent it from appearing on middle click
+                  stageRef.on("contextmenu", function (e) {
+                    e.evt.preventDefault();
+                  });
+
+                  () => {
+                    stageRef.off("mousedown");
+                    stageRef.off("mouseup");
+                    stageRef.off("mouseleave");
+                    stageRef.off("dragstart");
+                    stageRef.off("dragmove");
+                    stageRef.off("contextmenu");
+                  };
+                }
+              ),
+            },
+            {
+              input: ({ context }) => ({ ...context }),
+              id: "shortcut-handler",
+              systemId: "shortcut-handler",
+              src: fromCallback<
+                { type: "" },
+                { shortcutManager: ShortcutManager }
+              >(({ input: { shortcutManager }, sendBack }) => {
+                shortcutManager.register(
+                  ["Space"],
+                  (e) => {
+                    if (e.type === "keydown") {
+                      sendBack({ type: "PANNING_MODE_ENABLED" });
+                    } else {
+                      sendBack({ type: "PANNING_MODE_DISABLED" });
+                    }
+                  },
+                  { preventDefault: true, hold: true }
+                );
+                shortcutManager.start();
+
+                return () => shortcutManager.disableAll();
+              }),
+            },
+          ],
           initial: "inactive",
           states: {
             inactive: {
@@ -231,16 +287,16 @@ export const editorMachine = createMachine({
               on: {
                 PANNING_MODE_DISABLED: "inactive",
               },
-              entry: ({ context }) => {
-                if (context.stageRef) {
-                  context.stageRef.draggable(true);
-                  context.stageRef.container().style.cursor = "grab";
+              entry: ({ context: { stageRef } }) => {
+                if (stageRef) {
+                  stageRef.draggable(true);
+                  stageRef.container().style.cursor = "grab";
                 }
               },
-              exit: ({ context }) => {
-                if (context.stageRef) {
-                  context.stageRef.draggable(false);
-                  context.stageRef.container().style.cursor = "auto";
+              exit: ({ context: { stageRef } }) => {
+                if (stageRef) {
+                  stageRef.draggable(false);
+                  stageRef.container().style.cursor = "auto";
                 }
               },
             },
