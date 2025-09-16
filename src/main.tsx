@@ -6,6 +6,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { Provider } from "tinybase/ui-react";
 import { scenesStore } from "./lib/scenes.store";
+import { QueryProvider } from "./providers/QueryProviderr";
 
 // Create a new router instance
 const router = createRouter({ routeTree, context: { store: scenesStore } });
@@ -24,7 +25,9 @@ if (!rootElement.innerHTML) {
   root.render(
     <StrictMode>
       <Provider>
-        <RouterProvider router={router} />
+        <QueryProvider>
+          <RouterProvider router={router} />
+        </QueryProvider>
       </Provider>
     </StrictMode>
   );

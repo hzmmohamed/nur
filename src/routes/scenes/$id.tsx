@@ -18,6 +18,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import LayersPanel from "@/components/layers-panel-2";
+import { VideoEditingProject } from "@/lib/masks.store copy";
 // import type { timelineMachine } from "@/lib/timeline-machine";
 
 export const Route = createFileRoute("/scenes/$id")({
@@ -49,6 +51,8 @@ export const Route = createFileRoute("/scenes/$id")({
     return { crumb: name };
   },
 });
+
+const project = new VideoEditingProject();
 
 function RouteComponent() {
   const editorActorRef = Route.useRouteContext().editorActor;
@@ -87,7 +91,7 @@ function RouteComponent() {
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={20}>
         <div className="flex h-full items-center justify-center p-6 bg-card">
-          <span className="font-semibold">Tools Sidebar</span>
+          <LayersPanel project={project} />
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>

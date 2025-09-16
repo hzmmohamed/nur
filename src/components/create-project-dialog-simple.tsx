@@ -5,40 +5,64 @@ import { Button } from "./ui/button";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useForm } from "@tanstack/react-form";
 import { Input } from "./ui/input";
-import { z } from "zod/v3";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { z } from "zod";
+import { useCreateProject } from "../hooks/useProjects";
+import { type CreateProjectData } from "../types/project";
 
 const defaultValues: {
   height: number;
   width: number;
   fps: number;
   name: string;
+  description: string;
 } = {
   fps: 24,
   height: 1080,
   width: 1920,
   name: "",
+  description: "",
 };
 
-export function NewSceneDialogContent() {
+interface CreateProjectDialogContentProps {
+  onSuccess?: (projectId: string) => void;
+  onClose?: () => void;
+  userId: string;
+}
+
+export function CreateProjectDialogContent({ 
+  onSuccess, 
+  onClose,
+  userId 
+}: CreateProjectDialogContentProps) {
   const [isAspectRatioLocked, setIsAspectRatioLocked] = useState(true);
   const [aspectRatio, setAspectRatio] = useState(16 / 9);
-  const navigate = useNavigate();
-  const { store } = useRouteContext({ from: "__root__" });
+  
+  const createProjectMutation = useCreateProject();
+
   const form = useForm({
     defaultValues,
-    onSubmit: async ({ value: { fps, height, name, width } }) => {
-      const id = crypto.randomUUID();
-      store.setRow("scenes", id, {
-        id,
-        name,
-        lastUpdatedAt: Date.now(),
-        canvasHeight: height,
-        canvasWidth: width,
-        framesCount: 0,
-        fps,
-      });
-      navigate({ to: "/scenes/$id", params: { id } });
+    onSubmit: async ({ value }) => {
+      const projectData: CreateProjectData = {
+        name: value.name,
+        description: value.description.trim() || undefined,
+        ownerId: userId,
+        canvasWidth: value.width,
+        canvasHeight: value.height,
+        fps: value.fps,
+        settings: {
+          isPublic: false,
+          allowComments: true,
+        },
+      };
+
+      try {
+        const newProject = await createProjectMutation.mutateAsync(projectData);
+        onSuccess?.(newProject.id);
+        onClose?.();
+      } catch (error) {
+        console.error('Failed to create project:', error);
+        // Error is handled by the mutation's onError callback
+      }
     },
   });
 
@@ -64,14 +88,16 @@ export function NewSceneDialogContent() {
       <div className="flex flex-col gap-6">
         <DialogHeader className="pb-4">
           <DialogTitle className="text-2xl text-foreground font-bold">
-            New Scene
+            New Project
           </DialogTitle>
         </DialogHeader>
+
+        {/* Project Name */}
         <div className="flex flex-col gap-4">
           <form.Field
             name="name"
             validators={{
-              onBlur: z.string().nonempty("Project name cannot be empty"),
+              onBlur: z.string().min(1, "Project name cannot be empty").max(100, "Project name too long"),
               onChange: z
                 .string()
                 .regex(
@@ -81,18 +107,18 @@ export function NewSceneDialogContent() {
             }}
             children={(field) => (
               <>
-                <Label htmlFor="name" className="text-sm font-semibold">
-                  Scene Name
+                <Label htmlFor="name" className="text-sm font-semibold text-foreground">
+                  Project Name
                 </Label>
                 <Input
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
                   type="text"
-                  placeholder="My Scene"
-                  className={
+                  placeholder="My Project"
+                  className={`text-foreground ${
                     field.state.meta.isValid ? "" : "border-destructive"
-                  }
+                  }`}
                 />
                 <div className="flex flex-col gap-2">
                   {field.state.meta.errors.map((error, i) => (
@@ -105,13 +131,52 @@ export function NewSceneDialogContent() {
             )}
           />
         </div>
+
+        {/* Project Description */}
         <div className="flex flex-col gap-4">
-          <Label htmlFor="canvas-dimensions" className="text-sm font-semibold">
+          <form.Field
+            name="description"
+            validators={{
+              onChange: z.string().max(500, "Description too long").optional(),
+            }}
+            children={(field) => (
+              <>
+                <Label htmlFor="description" className="text-sm font-semibold text-foreground">
+                  Description (Optional)
+                </Label>
+                <Input
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  type="text"
+                  placeholder="Project description..."
+                  className={`text-foreground ${
+                    field.state.meta.isValid ? "" : "border-destructive"
+                  }`}
+                />
+                <div className="flex flex-col gap-2">
+                  {field.state.meta.errors.map((error, i) => (
+                    <p key={i} className="text-destructive text-xs">
+                      {error?.message}
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
+          />
+        </div>
+
+        {/* Canvas Dimensions */}
+        <div className="flex flex-col gap-4">
+          <Label htmlFor="canvas-dimensions" className="text-sm font-semibold text-foreground">
             Canvas Dimensions
           </Label>
           <div className="flex items-center space-x-2">
             <form.Field
               name="width"
+              validators={{
+                onChange: z.number().int().positive().min(1).max(7680),
+              }}
               listeners={{
                 onChange: () => {
                   if (isAspectRatioLocked) {
@@ -123,20 +188,33 @@ export function NewSceneDialogContent() {
                 },
               }}
               children={(field) => (
-                <Input
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.valueAsNumber)}
-                  onBlur={field.handleBlur}
-                  type="number"
-                  placeholder="Width"
-                  min={0}
-                  max={4000}
-                />
+                <div className="flex-1">
+                  <Input
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.valueAsNumber)}
+                    onBlur={field.handleBlur}
+                    type="number"
+                    placeholder="Width"
+                    min={1}
+                    max={7680}
+                    className={`text-foreground ${
+                      field.state.meta.isValid ? "" : "border-destructive"
+                    }`}
+                  />
+                  {field.state.meta.errors.map((error, i) => (
+                    <p key={i} className="text-destructive text-xs mt-1">
+                      {error?.message}
+                    </p>
+                  ))}
+                </div>
               )}
             />
             <span className="text-muted-foreground">x</span>
             <form.Field
               name="height"
+              validators={{
+                onChange: z.number().int().positive().min(1).max(4320),
+              }}
               listeners={{
                 onChange: () => {
                   if (isAspectRatioLocked) {
@@ -148,15 +226,25 @@ export function NewSceneDialogContent() {
                 },
               }}
               children={(field) => (
-                <Input
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.valueAsNumber)}
-                  onBlur={field.handleBlur}
-                  type="number"
-                  placeholder="Height"
-                  min={0}
-                  max={4000}
-                />
+                <div className="flex-1">
+                  <Input
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.valueAsNumber)}
+                    onBlur={field.handleBlur}
+                    type="number"
+                    placeholder="Height"
+                    min={1}
+                    max={4320}
+                    className={`text-foreground ${
+                      field.state.meta.isValid ? "" : "border-destructive"
+                    }`}
+                  />
+                  {field.state.meta.errors.map((error, i) => (
+                    <p key={i} className="text-destructive text-xs mt-1">
+                      {error?.message}
+                    </p>
+                  ))}
+                </div>
               )}
             />
             <Button
@@ -185,14 +273,16 @@ export function NewSceneDialogContent() {
           )}
         </div>
 
+        {/* FPS */}
         <div className="flex flex-col gap-4">
           <form.Field
             name="fps"
-            // hfahmi: Is there a need for validators whene min and max are set on the input itself
-            // validators={{ onChange: z.number().positive().int().max(40) }}
+            validators={{
+              onChange: z.number().int().positive().min(1).max(120),
+            }}
             children={(field) => (
               <>
-                <Label htmlFor="fps" className="text-sm font-semibold">
+                <Label htmlFor="fps" className="text-sm font-semibold text-foreground">
                   Frames Per Second (FPS)
                 </Label>
                 <Input
@@ -201,15 +291,36 @@ export function NewSceneDialogContent() {
                   onBlur={field.handleBlur}
                   type="number"
                   placeholder="FPS"
-                  min={0}
-                  max={40}
+                  min={1}
+                  max={120}
+                  className={`text-foreground ${
+                    field.state.meta.isValid ? "" : "border-destructive"
+                  }`}
                 />
+                <div className="flex flex-col gap-2">
+                  {field.state.meta.errors.map((error, i) => (
+                    <p key={i} className="text-destructive text-xs">
+                      {error?.message}
+                    </p>
+                  ))}
+                </div>
               </>
             )}
           />
         </div>
 
-        <div className="flex justify-end gap-6 bottom-0 w-full self-end">
+        {/* Submit Button */}
+        <div className="flex justify-end gap-3 bottom-0 w-full self-end">
+          {onClose && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose}
+              disabled={createProjectMutation.isPending}
+            >
+              Cancel
+            </Button>
+          )}
           <form.Subscribe
             selector={({ isPristine, fieldMeta, canSubmit, isSubmitting }) => ({
               isPristine,
@@ -218,13 +329,66 @@ export function NewSceneDialogContent() {
               isSubmitting,
             })}
             children={({ canSubmit, isSubmitting, isPristine }) => (
-              <Button type="submit" disabled={isPristine || !canSubmit}>
-                {isSubmitting ? "..." : "Create"}
+              <Button 
+                type="submit" 
+                disabled={isPristine || !canSubmit || createProjectMutation.isPending}
+              >
+                {createProjectMutation.isPending ? "Creating..." : "Create Project"}
               </Button>
             )}
           />
         </div>
+
+        {/* Error Display */}
+        {createProjectMutation.isError && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+            <p className="text-destructive text-sm">
+              Failed to create project. Please try again.
+            </p>
+          </div>
+        )}
       </div>
     </form>
+  );
+}
+
+// Example usage component that wraps the dialog
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+
+interface CreateProjectDialogProps {
+  children: React.ReactNode;
+  userId: string;
+  onProjectCreated?: (projectId: string) => void;
+}
+
+export function CreateProjectDialog({ 
+  children, 
+  userId, 
+  onProjectCreated 
+}: CreateProjectDialogProps) {
+  const [open, setOpen] = useState(false);
+
+  const handleSuccess = (projectId: string) => {
+    setOpen(false);
+    onProjectCreated?.(projectId);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <CreateProjectDialogContent
+          userId={userId}
+          onSuccess={handleSuccess}
+          onClose={handleClose}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
