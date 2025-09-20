@@ -127,10 +127,8 @@ export function useDeleteProject() {
       return projectService.deleteProject(projectId);
     },
     onSuccess: (_, projectId) => {
-      // Remove from projects list cache
-      queryClient.setQueryData<Project[]>([PROJECTS_QUERY_KEY], (old = []) =>
-        old.filter((project) => project.id !== projectId)
-      );
+      // Invalidate projects query
+      queryClient.invalidateQueries({ queryKey: [PROJECTS_QUERY_KEY] });
 
       // Remove single project cache
       queryClient.removeQueries({ queryKey: ["project", projectId] });

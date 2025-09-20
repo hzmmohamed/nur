@@ -65,24 +65,6 @@ class ProjectService {
     };
   }
 
-  private deserializeProject(data: Record<string, any>): Project {
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description || undefined,
-      ownerId: data.ownerId,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      collaborators: JSON.parse(data.collaborators || "[]"),
-      settings: JSON.parse(data.settings || "{}"),
-      yjsDocumentId: data.yjsDocumentId,
-      canvasWidth: data.canvasWidth,
-      canvasHeight: data.canvasHeight,
-      fps: data.fps,
-      thumbnailBase64: data.thumbnailBase64,
-    };
-  }
-
   async createProject(data: CreateProjectData): Promise<Project> {
     try {
       const now = new Date().toISOString();
@@ -137,7 +119,7 @@ class ProjectService {
       if (!projectData || !projectData.id) {
         return null;
       }
-      return this.deserializeProject(projectData);
+      return ProjectSchema.parse(projectData);
     } catch (error) {
       throw new ProjectServiceError(`Failed to get project: ${error}`);
     }
