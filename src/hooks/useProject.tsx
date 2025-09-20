@@ -12,7 +12,7 @@ export function useProject(projectId: string) {
   return useQuery({
     queryKey: ["project", projectId],
     queryFn: () => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       return projectService.getProject(projectId);
     },
     enabled: !!projectId,
@@ -35,7 +35,7 @@ export function useUpdateSingleProject(projectId: string) {
 
   return useMutation({
     mutationFn: (data: UpdateProjectData) => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       const validatedData = UpdateProjectDataSchema.parse(data);
       return projectService.updateProject(projectId, validatedData);
     },
@@ -62,7 +62,7 @@ export function useAddCollaborator(projectId: string) {
 
   return useMutation({
     mutationFn: (userId: string) => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       z.string().min(1).parse(userId);
       return projectService.addCollaborator(projectId, userId);
     },
@@ -85,7 +85,7 @@ export function useRemoveCollaborator(projectId: string) {
 
   return useMutation({
     mutationFn: (userId: string) => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       z.string().min(1).parse(userId);
       return projectService.removeCollaborator(projectId, userId);
     },
@@ -107,7 +107,7 @@ export function useProjectStats(projectId: string) {
   return useQuery({
     queryKey: ["project-stats", projectId],
     queryFn: () => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       return projectService.getProjectStats(projectId);
     },
     enabled: !!projectId,

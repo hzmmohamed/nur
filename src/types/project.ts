@@ -5,32 +5,27 @@ import { z } from "zod";
 export const ProjectSettingsSchema = z.object({
   isPublic: z.boolean().default(false),
   allowComments: z.boolean().default(true),
-  version: z.string().default("1.0.0"),
 });
 
 export const ProjectSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z
     .string()
     .min(1, "Project name is required")
     .max(100, "Project name too long"),
   description: z.string().optional(),
   ownerId: z.string().min(1, "Owner ID is required"),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
   collaborators: z.array(z.string()).default([]),
   settings: ProjectSettingsSchema,
-  yjsDocumentId: z.string().uuid(),
+  yjsDocumentId: z.uuid(),
 
   // Canvas/Scene properties from ProjectCard
   canvasWidth: z.number().int().positive().default(1920),
   canvasHeight: z.number().int().positive().default(1080),
   fps: z.number().int().positive().min(1).max(120).default(30),
-  framesCount: z.number().int().nonnegative().default(0),
   thumbnailBase64: z.string().optional(),
-
-  // Additional metadata
-  lastUpdatedAt: z.string().datetime().optional(),
 });
 
 export const CreateProjectDataSchema = z.object({
@@ -40,7 +35,10 @@ export const CreateProjectDataSchema = z.object({
     .max(100, "Project name too long"),
   description: z.string().max(500, "Description too long").optional(),
   ownerId: z.string().min(1, "Owner ID is required"),
-  settings: ProjectSettingsSchema.partial().optional(),
+  settings: ProjectSettingsSchema.default({
+    allowComments: false,
+    isPublic: false,
+  }),
 
   // Canvas/Scene properties
   canvasWidth: z.number().int().positive().default(1920),
@@ -63,7 +61,6 @@ export const UpdateProjectDataSchema = z.object({
   canvasWidth: z.number().int().positive().optional(),
   canvasHeight: z.number().int().positive().optional(),
   fps: z.number().int().positive().min(1).max(120).optional(),
-  framesCount: z.number().int().nonnegative().optional(),
   thumbnailBase64: z.string().optional(),
 });
 

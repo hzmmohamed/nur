@@ -1,17 +1,157 @@
 // components/ProjectList.tsx
 import React, { useState } from "react";
-import {
-  useProjects,
-  useCreateProject,
-  useDeleteProject,
-} from "../hooks/useProjects";
-import { type CreateProjectData } from "../types/project";
+import { useProjects, useDeleteProject } from "../hooks/useProjects";
 import { CURRENT_USER_ID } from "@/lib/constants";
+import type { Project } from "@/types/project";
+
+import { Play, Clock, Monitor, Zap, Trash2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+interface ProjectCardProps {
+  project: Project;
+  onDelete?: (projectId: string) => void;
+}
+
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) => {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Format the updatedAt timestamp to relative time
+  const formatTimeAgo = (timestamp: string): string => {
+    const now = new Date();
+    const updated = new Date(timestamp);
+    const diffInSeconds = Math.floor(
+      (now.getTime() - updated.getTime()) / 1000
+    );
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    return updated.toLocaleDateString();
+  };
+
+  const handleDeleteConfirm = () => {
+    onDelete?.(project.id);
+    setIsDeleteDialogOpen(false);
+  };
+
+  return (
+    <Card className="hover:shadow-md transition-shadow duration-200 cursor-pointer overflow-hidden group">
+      {/* Thumbnail Section */}
+      <div className="relative aspect-video bg-muted flex items-center justify-center">
+        {project.thumbnailBase64 ? (
+          <img
+            src={`data:image/jpeg;base64,${project.thumbnailBase64}`}
+            alt={project.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center text-muted-foreground">
+            <Play size={32} className="mb-2" />
+            <span className="text-sm font-medium">No Preview</span>
+          </div>
+        )}
+
+        {/* Delete Button - appears on hover */}
+        <AlertDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+        >
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              size="icon"
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDeleteDialogOpen(true);
+              }}
+            >
+              <Trash2 size={16} />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Project</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{project.name}"? This action
+                cannot be undone and will permanently remove the project and all
+                its data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete Project
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      {/* Content Section */}
+      <CardContent className="p-4">
+        {/* Project Name */}
+        <h3 className="font-semibold text-foreground text-lg mb-1 truncate">
+          {project.name}
+        </h3>
+
+        {/* Description */}
+        {project.description && (
+          <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">
+            {project.description}
+          </p>
+        )}
+
+        {/* Metadata Row */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          {/* Canvas Size and FPS */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Monitor size={12} />
+              <span>
+                {project.canvasWidth} × {project.canvasHeight}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Zap size={12} />
+              <span>{project.fps} fps</span>
+            </div>
+          </div>
+
+          {/* Last Updated */}
+          <div className="flex items-center gap-1">
+            <Clock size={12} />
+            <span>{formatTimeAgo(project.updatedAt)}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export const ProjectList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectDesc, setNewProjectDesc] = useState("");
 
   const {
     data: projects = [],
@@ -27,12 +167,7 @@ export const ProjectList: React.FC = () => {
 
   const deleteProjectMutation = useDeleteProject();
 
-  const handleDeleteProject = async (
-    projectId: string,
-    projectName: string
-  ) => {
-    if (!confirm(`Are you sure you want to delete "${projectName}"?`)) return;
-
+  const handleDeleteProject = async (projectId: string) => {
     try {
       await deleteProjectMutation.mutateAsync(projectId);
     } catch (error) {
@@ -67,7 +202,7 @@ export const ProjectList: React.FC = () => {
   return (
     <div>
       {/* Search */}
-      <div className="mb-6">
+      {/* <div className="mb-6">
         <input
           type="text"
           placeholder="Search projects..."
@@ -75,7 +210,7 @@ export const ProjectList: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full max-w-md px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         />
-      </div>
+      </div> */}
 
       {/* Projects Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -87,80 +222,7 @@ export const ProjectList: React.FC = () => {
           </div>
         ) : (
           projects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow"
-            >
-              {project.thumbnailBase64 && (
-                <img
-                  src={`data:image/png;base64,${project.thumbnailBase64}`}
-                  alt={`Thumbnail for ${project.name}`}
-                  className="w-full h-auto object-cover aspect-video mb-3 rounded-md bg-muted"
-                />
-              )}
-
-              <h3 className="text-lg font-semibold text-card-foreground mb-2 line-clamp-1">
-                {project.name}
-              </h3>
-
-              {project.description && (
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {project.description}
-                </p>
-              )}
-
-              <div className="text-xs text-muted-foreground space-y-1 mb-4">
-                <div className="flex items-center justify-between">
-                  <span>
-                    {project.canvasWidth} x {project.canvasHeight}
-                  </span>
-                  <span>{project.framesCount} frames</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {Math.floor(
-                      (project.framesCount || 0) / (project.fps || 30)
-                    )}
-                    s
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-secondary text-secondary-foreground rounded text-xs">
-                    {project.fps || 30} fps
-                  </span>
-                </div>
-                <div className="text-xs">
-                  Created: {new Date(project.createdAt).toLocaleDateString()}
-                </div>
-                <div className="text-xs">
-                  Updated: {new Date(project.updatedAt).toLocaleDateString()}
-                </div>
-                <div className="text-xs">
-                  Collaborators: {project.collaborators.length}
-                </div>
-                <div className="text-xs break-all">
-                  Document: {project.yjsDocumentId}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => handleDeleteProject(project.id, project.name)}
-                  disabled={deleteProjectMutation.isPending}
-                  className="px-2 py-1 text-xs text-destructive border border-destructive rounded hover:bg-destructive hover:text-destructive-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 transition-colors"
-                >
-                  {deleteProjectMutation.isPending ? "Deleting..." : "Delete"}
-                </button>
-
-                <span
-                  className={`px-2 py-1 rounded text-xs border ${
-                    project.settings.isPublic
-                      ? "bg-secondary text-secondary-foreground border-secondary"
-                      : "bg-muted text-muted-foreground border-border"
-                  }`}
-                >
-                  {project.settings.isPublic ? "Public" : "Private"}
-                </span>
-              </div>
-            </div>
+            <ProjectCard project={project} key={project.id} onDelete={handleDeleteProject} />
           ))
         )}
       </div>

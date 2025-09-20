@@ -92,7 +92,7 @@ export function useUpdateProject() {
       data: UpdateProjectData;
     }) => {
       // Validate data before sending
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       const validatedData = UpdateProjectDataSchema.parse(data);
       return projectService.updateProject(projectId, validatedData);
     },
@@ -118,70 +118,12 @@ export function useUpdateProject() {
   });
 }
 
-export function useUpdateFrameCount() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      projectId,
-      framesCount,
-    }: {
-      projectId: string;
-      framesCount: number;
-    }) => projectService.updateFrameCount(projectId, framesCount),
-    onSuccess: (updatedProject) => {
-      if (updatedProject) {
-        queryClient.setQueryData(
-          ["project", updatedProject.id],
-          updatedProject
-        );
-
-        // Update projects list cache
-        queryClient.setQueryData<Project[]>([PROJECTS_QUERY_KEY], (old = []) =>
-          old.map((project) =>
-            project.id === updatedProject.id ? updatedProject : project
-          )
-        );
-      }
-    },
-  });
-}
-
-export function useUpdateThumbnail() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      projectId,
-      thumbnailBase64,
-    }: {
-      projectId: string;
-      thumbnailBase64: string;
-    }) => projectService.updateThumbnail(projectId, thumbnailBase64),
-    onSuccess: (updatedProject) => {
-      if (updatedProject) {
-        queryClient.setQueryData(
-          ["project", updatedProject.id],
-          updatedProject
-        );
-
-        // Update projects list cache
-        queryClient.setQueryData<Project[]>([PROJECTS_QUERY_KEY], (old = []) =>
-          old.map((project) =>
-            project.id === updatedProject.id ? updatedProject : project
-          )
-        );
-      }
-    },
-  });
-}
-
 export function useDeleteProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (projectId: string) => {
-      z.string().uuid().parse(projectId);
+      z.uuid().parse(projectId);
       return projectService.deleteProject(projectId);
     },
     onSuccess: (_, projectId) => {

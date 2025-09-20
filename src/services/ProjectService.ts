@@ -1,12 +1,12 @@
 // services/ProjectService.ts
 import { redis } from "./upstashRedis";
 import { v4 as uuidv4 } from "uuid";
-import type {
-  Project,
-  CreateProjectData,
-  UpdateProjectData,
-  ProjectQueryParams,
-  ProjectSettings,
+import {
+  type Project,
+  type CreateProjectData,
+  type UpdateProjectData,
+  type ProjectQueryParams,
+  ProjectSchema,
 } from "../types/project";
 
 export class ProjectServiceError extends Error {
@@ -58,6 +58,10 @@ class ProjectService {
       collaborators: JSON.stringify(project.collaborators),
       settings: JSON.stringify(project.settings),
       yjsDocumentId: project.yjsDocumentId,
+      canvasWidth: project.canvasWidth.toString(),
+      canvasHeight: project.canvasHeight.toString(),
+      fps: project.fps.toString(),
+      thumbnailBase64: project.thumbnailBase64 || "",
     };
   }
 
@@ -72,6 +76,10 @@ class ProjectService {
       collaborators: JSON.parse(data.collaborators || "[]"),
       settings: JSON.parse(data.settings || "{}"),
       yjsDocumentId: data.yjsDocumentId,
+      canvasWidth: data.canvasWidth,
+      canvasHeight: data.canvasHeight,
+      fps: data.fps,
+      thumbnailBase64: data.thumbnailBase64,
     };
   }
 
@@ -83,19 +91,11 @@ class ProjectService {
 
       const project: Project = {
         id: projectId,
-        name: data.name,
-        description: data.description,
-        ownerId: data.ownerId,
         createdAt: now,
         updatedAt: now,
         collaborators: [],
-        settings: {
-          isPublic: false,
-          allowComments: true,
-          version: "1.0.0",
-          ...data.settings,
-        },
         yjsDocumentId,
+        ...data,
       };
 
       // Use pipeline for atomic operations
@@ -137,19 +137,21 @@ class ProjectService {
       if (!projectData || !projectData.id) {
         return null;
       }
-
       return this.deserializeProject(projectData);
     } catch (error) {
       throw new ProjectServiceError(`Failed to get project: ${error}`);
     }
   }
 
-  async getProjects(params: ProjectQueryParams = {}): Promise<Project[]> {
+  async getProjects(
+    params: ProjectQueryParams = { limit: 1000, offset: 0 }
+  ): Promise<Project[]> {
     try {
       const { userId, limit = 50, offset = 0, search } = params;
 
       let projectIds: string[] = [];
 
+      // TODO: Replace this search with a search by name
       if (search) {
         // Search by terms
         const searchTerms = search
@@ -210,7 +212,7 @@ class ProjectService {
         if (result) {
           const projectData = result as Record<string, any>;
           if (projectData.id) {
-            projects.push(projectData);
+            projects.push(ProjectSchema.parse(projectData));
           }
         }
       }
