@@ -105,7 +105,6 @@ class VectorDocument {
   private readonly persistence: IndexeddbPersistence;
   private readonly options: Required<VectorDocumentOptions>;
   private readonly undoManager?: UndoManager;
-  private isReady: boolean = false;
   private readonly readyPromise: Promise<void>;
   private undoRedoCallbacks: Set<UndoRedoCallback> = new Set();
 

@@ -49,7 +49,6 @@ const canvasEventActor = fromCallback<{ type: "" }, { layer: Konva.Layer }>(
 
     const handleMouseMove: KonvaEventListener<Stage, MouseEvent> = (e) => {
       const point = e.currentTarget.getRelativePointerPosition();
-      console.log(point);
       sendBack({
         type: "MOUSE_MOVE",
         point,
@@ -96,307 +95,6 @@ const canvasEventActor = fromCallback<{ type: "" }, { layer: Konva.Layer }>(
   }
 );
 
-// // Renderer actor
-// const rendererActor = fromCallback(({ receive, input }) => {
-//   const { canvas } = input;
-//   let currentState = null;
-
-//   // const drawGrid = (ctx, canvasSize) => {
-//   //   const gridSize = 20;
-//   //   ctx.strokeStyle = "#e5e5e5";
-//   //   ctx.lineWidth = 1;
-
-//   //   ctx.beginPath();
-//   //   for (let x = 0; x <= canvasSize.width; x += gridSize) {
-//   //     ctx.moveTo(x, 0);
-//   //     ctx.lineTo(x, canvasSize.height);
-//   //   }
-//   //   for (let y = 0; y <= canvasSize.height; y += gridSize) {
-//   //     ctx.moveTo(0, y);
-//   //     ctx.lineTo(canvasSize.width, y);
-//   //   }
-//   //   ctx.stroke();
-//   // };
-
-//   const drawPath = (ctx, path, isSelected = false, isPreview = false) => {
-//     if (path.points.length === 0) return;
-
-//     ctx.beginPath();
-//     ctx.moveTo(path.points[0].x, path.points[0].y);
-
-//     for (let i = 1; i < path.points.length; i++) {
-//       const currentPoint = path.points[i];
-//       const previousPoint = path.points[i - 1];
-
-//       if (previousPoint.handleOut || currentPoint.handleIn) {
-//         const cp1x =
-//           previousPoint.x +
-//           (previousPoint.handleOut ? previousPoint.handleOut.x : 0);
-//         const cp1y =
-//           previousPoint.y +
-//           (previousPoint.handleOut ? previousPoint.handleOut.y : 0);
-//         const cp2x =
-//           currentPoint.x +
-//           (currentPoint.handleIn ? currentPoint.handleIn.x : 0);
-//         const cp2y =
-//           currentPoint.y +
-//           (currentPoint.handleIn ? currentPoint.handleIn.y : 0);
-
-//         ctx.bezierCurveTo(
-//           cp1x,
-//           cp1y,
-//           cp2x,
-//           cp2y,
-//           currentPoint.x,
-//           currentPoint.y
-//         );
-//       } else {
-//         ctx.lineTo(currentPoint.x, currentPoint.y);
-//       }
-//     }
-
-//     if (path.closed) {
-//       const firstPoint = path.points[0];
-//       const lastPoint = path.points[path.points.length - 1];
-
-//       if (lastPoint.handleOut || firstPoint.handleIn) {
-//         const cp1x =
-//           lastPoint.x + (lastPoint.handleOut ? lastPoint.handleOut.x : 0);
-//         const cp1y =
-//           lastPoint.y + (lastPoint.handleOut ? lastPoint.handleOut.y : 0);
-//         const cp2x =
-//           firstPoint.x + (firstPoint.handleIn ? firstPoint.handleIn.x : 0);
-//         const cp2y =
-//           firstPoint.y + (firstPoint.handleIn ? firstPoint.handleIn.y : 0);
-
-//         ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, firstPoint.x, firstPoint.y);
-//       } else {
-//         ctx.lineTo(firstPoint.x, firstPoint.y);
-//       }
-//       ctx.closePath();
-//     }
-
-//     if (path.closed) {
-//       ctx.fillStyle = "rgba(59, 130, 246, 0.1)";
-//       ctx.fill();
-//     }
-
-//     ctx.strokeStyle = isSelected ? "#f59e0b" : "#3b82f6";
-//     ctx.lineWidth = 2;
-//     ctx.lineCap = "round";
-//     ctx.lineJoin = "round";
-
-//     if (isPreview) {
-//       ctx.setLineDash([5, 5]);
-//     } else {
-//       ctx.setLineDash([]);
-//     }
-
-//     ctx.stroke();
-//   };
-
-//   const drawPreviewPath = (ctx, path, previewPoint) => {
-//     if (!path || !previewPoint || path.points.length === 0) return;
-
-//     ctx.beginPath();
-//     ctx.moveTo(path.points[0].x, path.points[0].y);
-
-//     for (let i = 1; i < path.points.length; i++) {
-//       const currentPoint = path.points[i];
-//       const previousPoint = path.points[i - 1];
-
-//       if (previousPoint.handleOut || currentPoint.handleIn) {
-//         const cp1x =
-//           previousPoint.x +
-//           (previousPoint.handleOut ? previousPoint.handleOut.x : 0);
-//         const cp1y =
-//           previousPoint.y +
-//           (previousPoint.handleOut ? previousPoint.handleOut.y : 0);
-//         const cp2x =
-//           currentPoint.x +
-//           (currentPoint.handleIn ? currentPoint.handleIn.x : 0);
-//         const cp2y =
-//           currentPoint.y +
-//           (currentPoint.handleIn ? currentPoint.handleIn.y : 0);
-
-//         ctx.bezierCurveTo(
-//           cp1x,
-//           cp1y,
-//           cp2x,
-//           cp2y,
-//           currentPoint.x,
-//           currentPoint.y
-//         );
-//       } else {
-//         ctx.lineTo(currentPoint.x, currentPoint.y);
-//       }
-//     }
-
-//     const lastPoint = path.points[path.points.length - 1];
-//     if (lastPoint.handleOut) {
-//       const cp1x = lastPoint.x + lastPoint.handleOut.x;
-//       const cp1y = lastPoint.y + lastPoint.handleOut.y;
-//       ctx.bezierCurveTo(
-//         cp1x,
-//         cp1y,
-//         previewPoint.x,
-//         previewPoint.y,
-//         previewPoint.x,
-//         previewPoint.y
-//       );
-//     } else {
-//       ctx.lineTo(previewPoint.x, previewPoint.y);
-//     }
-
-//     ctx.strokeStyle = "#3b82f6";
-//     ctx.lineWidth = 2;
-//     ctx.setLineDash([5, 5]);
-//     ctx.stroke();
-//   };
-
-//   const drawControls = (
-//     ctx,
-//     path,
-//     pathIndex,
-//     selectedPoint,
-//     selectedHandle
-//   ) => {
-//     if (!path) return;
-
-//     path.points.forEach((point, pointIndex) => {
-//       // Draw handle lines
-//       if (point.handleIn) {
-//         ctx.beginPath();
-//         ctx.moveTo(point.x, point.y);
-//         ctx.lineTo(point.x + point.handleIn.x, point.y + point.handleIn.y);
-//         ctx.strokeStyle = "#666";
-//         ctx.lineWidth = 1;
-//         ctx.setLineDash([]);
-//         ctx.stroke();
-//       }
-
-//       if (point.handleOut) {
-//         ctx.beginPath();
-//         ctx.moveTo(point.x, point.y);
-//         ctx.lineTo(point.x + point.handleOut.x, point.y + point.handleOut.y);
-//         ctx.strokeStyle = "#666";
-//         ctx.lineWidth = 1;
-//         ctx.setLineDash([]);
-//         ctx.stroke();
-//       }
-
-//       // Draw handle points
-//       if (point.handleIn) {
-//         const handleX = point.x + point.handleIn.x;
-//         const handleY = point.y + point.handleIn.y;
-//         const isSelectedHandle =
-//           selectedHandle?.pathIndex === pathIndex &&
-//           selectedHandle?.pointIndex === pointIndex &&
-//           selectedHandle?.handle === "in";
-
-//         ctx.beginPath();
-//         ctx.arc(handleX, handleY, 3, 0, 2 * Math.PI);
-//         ctx.fillStyle = isSelectedHandle ? "#f59e0b" : "#666";
-//         ctx.fill();
-//         ctx.strokeStyle = "white";
-//         ctx.lineWidth = 1;
-//         ctx.stroke();
-//       }
-
-//       if (point.handleOut) {
-//         const handleX = point.x + point.handleOut.x;
-//         const handleY = point.y + point.handleOut.y;
-//         const isSelectedHandle =
-//           selectedHandle?.pathIndex === pathIndex &&
-//           selectedHandle?.pointIndex === pointIndex &&
-//           selectedHandle?.handle === "out";
-
-//         ctx.beginPath();
-//         ctx.arc(handleX, handleY, 3, 0, 2 * Math.PI);
-//         ctx.fillStyle = isSelectedHandle ? "#f59e0b" : "#666";
-//         ctx.fill();
-//         ctx.strokeStyle = "white";
-//         ctx.lineWidth = 1;
-//         ctx.stroke();
-//       }
-
-//       // Draw main control point
-//       const isSelectedPoint =
-//         selectedPoint?.pathIndex === pathIndex &&
-//         selectedPoint?.pointIndex === pointIndex;
-
-//       ctx.beginPath();
-//       ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
-//       ctx.fillStyle = isSelectedPoint ? "#f59e0b" : "#3b82f6";
-//       ctx.fill();
-//       ctx.strokeStyle = "white";
-//       ctx.lineWidth = 2;
-//       ctx.stroke();
-
-//       // First point indicator for open paths
-//       if (pointIndex === 0 && !path.closed) {
-//         ctx.beginPath();
-//         ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
-//         ctx.strokeStyle = "#10b981";
-//         ctx.lineWidth = 2;
-//         ctx.setLineDash([2, 2]);
-//         ctx.stroke();
-//         ctx.setLineDash([]);
-//       }
-//     });
-//   };
-
-//   const render = (state) => {
-//     const {
-//       layer,
-//       paths,
-//       currentPath,
-//       selectedPath,
-//       selectedPoint,
-//       selectedHandle,
-//       tool,
-//       previewPoint,
-//     } = state.context;
-
-//     const canvas = layer.getCanvas();
-//     const ctx = canvas.context;
-//     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-//     // drawGrid(ctx, canvasSize);
-
-//     paths.forEach((path, pathIndex) => {
-//       drawPath(ctx, path, selectedPath === pathIndex);
-
-//       if (
-//         (tool === "select" || selectedPath === pathIndex) &&
-//         (selectedPath === pathIndex || tool === "select")
-//       ) {
-//         drawControls(ctx, path, pathIndex, selectedPoint, selectedHandle);
-//       }
-//     });
-
-//     if (currentPath) {
-//       if (previewPoint) {
-//         drawPreviewPath(ctx, currentPath, previewPoint);
-//       } else {
-//         drawPath(ctx, currentPath, false, true);
-//       }
-//       drawControls(ctx, currentPath, -1, selectedPoint, selectedHandle);
-//     }
-//   };
-
-//   receive((event) => {
-//     if (event.type === "RENDER") {
-//       currentState = event.state;
-//       render(currentState);
-//     }
-//   });
-
-//   return () => {
-//     // Cleanup if needed
-//   };
-// });
-
 // Main state machine
 export const penToolMachine = setup({
   types: {
@@ -419,7 +117,6 @@ export const penToolMachine = setup({
     },
     events: {} as
       | { type: "SET_TOOL"; tool: "pen" | "select" }
-      | { type: "SET_CANVAS"; canvas: HTMLCanvasElement }
       | { type: "MOUSE_DOWN"; point: { x: number; y: number }; altKey: boolean }
       | { type: "MOUSE_MOVE"; point: { x: number; y: number }; altKey: boolean }
       | { type: "MOUSE_UP" }
@@ -496,8 +193,6 @@ export const penToolMachine = setup({
       currentPath: ({ context, event }) => {
         if (!context.currentPath || !context.selectedPoint)
           return context.currentPath;
-
-        console.log(context.dragStart);
 
         const handleLength = distance(context.dragStart, event.point);
         const handleAngle = angle(context.dragStart, event.point);
@@ -858,8 +553,9 @@ export const penToolMachine = setup({
               },
             ],
             UNDO: {
-              guard: "canUndo",
-              actions: ["undo", "render"],
+              actions: ({context})=>console.log(context.history)
+              // guard: "canUndo",
+              // actions: ["undo", "render"],
             },
             REDO: {
               guard: "canRedo",
@@ -867,9 +563,6 @@ export const penToolMachine = setup({
             },
             CLEAR_ALL: {
               actions: ["clearAll", "saveToHistory", "render"],
-            },
-            RESIZE_CANVAS: {
-              actions: ["resizeCanvas", "render"],
             },
           },
         },
@@ -902,7 +595,6 @@ export const penToolMachine = setup({
             },
 
             creatingCurve: {
-              entry: log("penmode"),
               on: {
                 MOUSE_MOVE: {
                   actions: ["createCurveHandles", "render"],

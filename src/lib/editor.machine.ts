@@ -12,7 +12,9 @@ import ShortcutManager from "@keybindy/core";
 import { generateSVGPath } from "./utils";
 import { penToolMachine } from "./pen-tool/pen-tool-machine";
 import VectorDocument from "./masks.store";
-
+import type { IVideoEditingProject } from "./data-model/interface";
+import * as Y from "yjs";
+import { VideoEditingProject } from "./data-model/impl-yjs";
 type Context = {
   fps: number;
   sceneId: string;
@@ -20,6 +22,7 @@ type Context = {
   shortcutManager: ShortcutManager;
   layers: Record<string, Konva.Layer>;
   masksDocument: VectorDocument;
+  projectData: IVideoEditingProject;
 };
 
 const zoomHandlerSubscriber = fromCallback<
@@ -86,6 +89,7 @@ export const editorMachine = createMachine({
       masks: new Konva.Layer({ id: "masks" }),
     },
     masksDocument: new VectorDocument(`masks-${sceneId}`),
+    projectData: new VideoEditingProject(new Y.Doc(), {}),
   }),
   initial: "loading",
   invoke: [

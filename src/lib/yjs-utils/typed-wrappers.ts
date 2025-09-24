@@ -196,10 +196,11 @@ export class TypedYArrayOfMaps<T> {
     if (!this.schema) return;
 
     items.forEach((item, index) => {
+      console.log("validation", item);
       const validation = item.validate();
       if (!validation.isValid) {
         throw new TypedYMapValidationError(
-          `Item at index ${index} failed validation: ${validation.errors?.errors
+          `Item at index ${index} failed validation: ${validation.errors?.issues
             .map((e) => `${e.path.join(".")}: ${e.message}`)
             .join(", ")}`,
           validation.errors
@@ -431,7 +432,7 @@ export class TypedYArrayOfMaps<T> {
   // Create and add a new item
   addItem(initialData?: Partial<T>): TypedYMap<T> {
     const item = this.createItem(initialData);
-    this.push([item]);
+    this.yarray.push([item.ymap]);
     return item;
   }
 
@@ -469,7 +470,10 @@ export function createTypedYMap<T>(
 }
 
 export function createTypedYArrayOfMaps<T>(
-p0: Y.Array<unknown>, layerFrameMaskSchema: unknown, schema?: ZodSchema<T>): TypedYArrayOfMaps<T> {
+  p0: Y.Array<unknown>,
+  layerFrameMaskSchema: unknown,
+  schema?: ZodSchema<T>
+): TypedYArrayOfMaps<T> {
   const yarray = new Y.Array<Y.Map<any>>();
   return new TypedYArrayOfMaps<T>(yarray, schema);
 }

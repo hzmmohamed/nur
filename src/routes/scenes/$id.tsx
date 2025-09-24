@@ -18,6 +18,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import LayersPanel from "@/components/layers-panel-4";
 // import type { timelineMachine } from "@/lib/timeline-machine";
 
 export const Route = createFileRoute("/scenes/$id")({
@@ -52,6 +53,10 @@ export const Route = createFileRoute("/scenes/$id")({
 
 function RouteComponent() {
   const editorActorRef = Route.useRouteContext().editorActor;
+  const projectRef = useSelector(
+    editorActorRef,
+    (state) => state.context.projectData
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -86,9 +91,7 @@ function RouteComponent() {
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={20}>
-        <div className="flex h-full items-center justify-center p-6 bg-card">
-          <span className="font-semibold">Tools Sidebar</span>
-        </div>
+        <LayersPanel project={projectRef} />
       </ResizablePanel>
     </ResizablePanelGroup>
   );
