@@ -89,7 +89,11 @@ export const editorMachine = createMachine({
       masks: new Konva.Layer({ id: "masks" }),
     },
     masksDocument: new VectorDocument(`masks-${sceneId}`),
-    projectData: new VideoEditingProject(new Y.Doc(), {}),
+    projectData: new VideoEditingProject(
+      new Y.Doc(),
+      {},
+      { persistenceKey: sceneId }
+    ),
   }),
   initial: "loading",
   invoke: [

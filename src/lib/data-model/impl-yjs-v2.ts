@@ -14,6 +14,7 @@ import {
   LayerSchema,
   ProjectSchema,
 } from "./types";
+import { IndexeddbPersistence } from "y-indexeddb";
 import type { IVideoEditingProject } from "./interface";
 
 // Types for undo/redo metadata
@@ -48,7 +49,14 @@ export class VideoEditingProject implements IVideoEditingProject {
   private readonly undoManager: Y.UndoManager;
   private undoRedoCallbacks: Set<(state: UndoRedoState) => void> = new Set();
 
-  constructor(readonly ydoc: Y.Doc, projectData?: Partial<Project>) {
+  // Persistence
+  private readonly persistence?: IndexeddbPersistence;
+
+  constructor(
+    readonly ydoc: Y.Doc,
+    projectData?: Partial<Project>,
+    options?: { persistenceKey?: string }
+  ) {
     // Initialize typed Yjs structures
     this.project = new TypedYMap(ydoc.getMap("project"), ProjectSchema);
     this.frames = new TypedYArrayOfMaps(ydoc.getArray("frames"), FrameSchema);
@@ -61,10 +69,16 @@ export class VideoEditingProject implements IVideoEditingProject {
     // Initialize awareness for user selections
     this.awareness = new awarenessProtocol.Awareness(ydoc);
 
+    // Initialize persistence if key provided
+    if (options?.persistenceKey) {
+      this.persistence = new IndexeddbPersistence(options.persistenceKey, ydoc);
+    }
+
     // Initialize project if data provided
     if (projectData) {
       this.initializeProject(projectData);
     }
+
     // Initialize undo manager with all the data structures we want to track
     this.undoManager = new Y.UndoManager(this.ydoc, {
       // Capture timeout - operations within this timeframe are grouped
@@ -75,6 +89,53 @@ export class VideoEditingProject implements IVideoEditingProject {
 
     // Set up undo manager event listeners
     this.setupUndoManagerListeners();
+  }
+
+  /**
+   * Get the persistence instance for advanced usage
+   * @returns The IndexeddbPersistence instance if enabled
+   */
+  getPersistence(): IndexeddbPersistence | undefined {
+    return this.persistence;
+  }
+
+  /**
+   * Wait for persistence to be ready (document loaded from IndexedDB)
+   * @returns Promise that resolves when persistence is synced
+   */
+  async waitForPersistence(): Promise<void> {
+    if (!this.persistence) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      if (this.persistence!.synced) {
+        resolve();
+      } else {
+        this.persistence!.once("synced", resolve);
+      }
+    });
+  }
+
+  /**
+   * Clear all persisted data from IndexedDB
+   * @returns Promise that resolves when data is cleared
+   */
+  async clearPersistedData(): Promise<void> {
+    if (!this.persistence) {
+      throw new Error("Persistence not enabled");
+    }
+
+    return this.persistence.clearData();
+  }
+
+  /**
+   * Destroy the persistence connection
+   */
+  destroyPersistence(): void {
+    if (this.persistence) {
+      this.persistence.destroy();
+    }
   }
 
   // Project Management
