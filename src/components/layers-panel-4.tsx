@@ -27,17 +27,6 @@ import {
 import { Button } from "@/components/ui/button";
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-import {
   Eye,
   EyeOff,
   Lock,
@@ -78,7 +67,6 @@ function SortableLayerItem({
 }: SortableLayerItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(layer.name);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const {
     attributes,
@@ -148,9 +136,9 @@ function SortableLayerItem({
         </div>
 
         {/* Link/Chain Icon (placeholder for layer linking) */}
-        {/* <div className="w-5 flex justify-center opacity-0 group-hover:opacity-60">
+        <div className="w-5 flex justify-center opacity-0 group-hover:opacity-60">
           <Link className="h-3 w-3" />
-        </div> */}
+        </div>
 
         {/* Layer Thumbnail/Icon */}
         <div className="w-12 h-6 bg-muted border border-border flex items-center justify-center mr-2 ml-1">
@@ -224,7 +212,7 @@ function SortableLayerItem({
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setShowDeleteDialog(true)}
+                onClick={() => onDelete(layer.id)}
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="mr-2 h-3 w-3" />
@@ -244,31 +232,6 @@ function SortableLayerItem({
           <GripVertical className="h-3 w-3" />
         </div>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Layer</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{layer.name}"? This action cannot
-              be undone and will remove all associated masks and animations.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                onDelete(layer.id);
-                setShowDeleteDialog(false);
-              }}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
@@ -441,7 +404,6 @@ export default function LayersPanel({
           </Button>
           <Button
             size="sm"
-            disabled
             variant="ghost"
             className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
             title="New Group"
@@ -450,7 +412,6 @@ export default function LayersPanel({
           </Button>
           <Button
             size="sm"
-            disabled
             variant="ghost"
             className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
             title="Add Mask"

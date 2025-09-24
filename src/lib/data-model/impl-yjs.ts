@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import * as awarenessProtocol from "y-protocols/awareness";
 import { TypedYMap, TypedYArrayOfMaps } from "../yjs-utils/typed-wrappers";
 import {
   type Point,
@@ -12,7 +13,6 @@ import {
   LayerFrameMaskSchema,
   LayerSchema,
   ProjectSchema,
-  UserSelectionSchema,
 } from "./types";
 import type { IVideoEditingProject } from "./interface";
 
@@ -22,7 +22,9 @@ export class VideoEditingProject implements IVideoEditingProject {
   private readonly frames: TypedYArrayOfMaps<Frame>;
   private readonly layers: TypedYArrayOfMaps<Layer>;
   private readonly layerFrameMasks: TypedYArrayOfMaps<LayerFrameMask>;
-  private readonly userSelections: TypedYArrayOfMaps<UserSelection>;
+  
+  // Awareness for user selections (ephemeral state)
+  private readonly awareness: awarenessProtocol.Awareness;
 
   constructor(readonly ydoc: Y.Doc, projectData?: Partial<Project>) {
     // Initialize typed Yjs structures
@@ -33,10 +35,9 @@ export class VideoEditingProject implements IVideoEditingProject {
       ydoc.getArray("layerFrameMasks"),
       LayerFrameMaskSchema
     );
-    this.userSelections = new TypedYArrayOfMaps(
-      ydoc.getArray("userSelections"),
-      UserSelectionSchema
-    );
+
+    // Initialize awareness for user selections
+    this.awareness = new awarenessProtocol.Awareness(ydoc);
 
     // Initialize project if data provided
     if (projectData) {
@@ -84,6 +85,10 @@ export class VideoEditingProject implements IVideoEditingProject {
   removeFrame(frameId: string): boolean {
     // Also remove all associated layer-frame masks
     this.removeAllMasksForFrame(frameId);
+    
+    // Clear frame from all user selections in awareness
+    this.clearFrameFromAllSelections(frameId);
+    
     return this.frames.removeWhere((frame) => frame.get("id") === frameId);
   }
 
@@ -202,8 +207,10 @@ export class VideoEditingProject implements IVideoEditingProject {
   removeLayer(layerId: string): boolean {
     // Remove all associated layer-frame masks
     this.removeAllMasksForLayer(layerId);
-    // Update user selections
-    this.clearLayerFromSelections(layerId);
+    
+    // Clear layer from all user selections in awareness
+    this.clearLayerFromAllSelections(layerId);
+    
     return this.layers.removeWhere((layer) => layer.get("id") === layerId);
   }
 
@@ -283,6 +290,9 @@ export class VideoEditingProject implements IVideoEditingProject {
 
     if (filteredPaths.length === paths.length) return false;
 
+    // Clear the removed path from all user selections
+    this.clearPathFromAllSelections(pathId);
+
     mask.set("paths", filteredPaths);
     return true;
   }
@@ -336,6 +346,129 @@ export class VideoEditingProject implements IVideoEditingProject {
         this.layerFrameMasks.delete(actualIndex);
       }
     });
+  }
+
+  // User Selection Management - Now using Awareness
+  setUserSelection(userId: string, selection: Partial<UserSelection>): void {
+    const currentLocalState = this.awareness.getLocalState() || {};
+    const currentSelection = currentLocalState.selection as UserSelection || {};
+
+    const selectionData: UserSelection = {
+      userId,
+      selectedLayerId: null,
+      selectedFrameId: null,
+      selectedPathIds: [],
+      selectedPointIndices: [],
+      ...currentSelection,
+      ...selection,
+    };
+
+    // Set the selection in awareness local state
+    this.awareness.setLocalStateField('selection', selectionData);
+  }
+
+  getUserSelection(userId: string): UserSelection | undefined {
+    // Get from awareness states
+    const states = this.awareness.getStates();
+    
+    for (const [clientId, state] of states) {
+      const selection = state.selection as UserSelection;
+      if (selection && selection.userId === userId) {
+        return selection;
+      }
+    }
+    
+    return undefined;
+  }
+
+  clearUserSelection(userId: string): boolean {
+    const currentLocalState = this.awareness.getLocalState() || {};
+    const currentSelection = currentLocalState.selection as UserSelection;
+    
+    // Only clear if the current local state belongs to this user
+    if (currentSelection && currentSelection.userId === userId) {
+      this.awareness.setLocalStateField('selection', null);
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Get all user selections from all clients
+   * @returns Array of all current user selections
+   */
+  getAllUserSelections(): UserSelection[] {
+    const states = this.awareness.getStates();
+    const selections: UserSelection[] = [];
+    
+    for (const [clientId, state] of states) {
+      const selection = state.selection as UserSelection;
+      if (selection) {
+        selections.push(selection);
+      }
+    }
+    
+    return selections;
+  }
+
+  /**
+   * Subscribe to changes in user selections across all clients
+   * @param callback Function to call when selections change
+   * @returns Unsubscribe function
+   */
+  onUserSelectionsChange(callback: (selections: UserSelection[]) => void): () => void {
+    const handler = () => {
+      callback(this.getAllUserSelections());
+    };
+    
+    this.awareness.on('change', handler);
+    
+    // Return unsubscribe function
+    return () => {
+      this.awareness.off('change', handler);
+    };
+  }
+
+  private clearLayerFromAllSelections(layerId: string): void {
+    const currentLocalState = this.awareness.getLocalState() || {};
+    const currentSelection = currentLocalState.selection as UserSelection;
+    
+    if (currentSelection && currentSelection.selectedLayerId === layerId) {
+      this.setUserSelection(currentSelection.userId, {
+        selectedLayerId: null,
+        selectedPathIds: [],
+        selectedPointIndices: [],
+      });
+    }
+    
+    // Note: We can only modify our own local state in awareness.
+    // Other clients will need to handle their own cleanup when they
+    // observe the layer deletion through document changes.
+  }
+
+  private clearFrameFromAllSelections(frameId: string): void {
+    const currentLocalState = this.awareness.getLocalState() || {};
+    const currentSelection = currentLocalState.selection as UserSelection;
+    
+    if (currentSelection && currentSelection.selectedFrameId === frameId) {
+      this.setUserSelection(currentSelection.userId, {
+        selectedFrameId: null,
+      });
+    }
+  }
+
+  private clearPathFromAllSelections(pathId: string): void {
+    const currentLocalState = this.awareness.getLocalState() || {};
+    const currentSelection = currentLocalState.selection as UserSelection;
+    
+    if (currentSelection && currentSelection.selectedPathIds.includes(pathId)) {
+      const updatedPathIds = currentSelection.selectedPathIds.filter(id => id !== pathId);
+      this.setUserSelection(currentSelection.userId, {
+        selectedPathIds: updatedPathIds,
+        selectedPointIndices: [], // Clear point indices when path is removed
+      });
+    }
   }
 
   // Utility Methods
@@ -432,51 +565,12 @@ export class VideoEditingProject implements IVideoEditingProject {
 
     return this.updatePath(layerId, frameId, pathId, { closed: true });
   }
+
+  /**
+   * Get the awareness instance for advanced usage
+   * @returns The awarenessProtocol.Awareness instance
+   */
+  getAwareness(): awarenessProtocol.Awareness {
+    return this.awareness;
+  }
 }
-
-// // User Selection Management
-// setUserSelection(userId: string, selection: Partial<UserSelection>): void {
-//   const existingSelection = this.userSelections.find(
-//     (sel) => sel.get("userId") === userId
-//   );
-
-//   const selectionData: UserSelection = {
-//     userId,
-//     selectedLayerId: null,
-//     selectedFrameId: null,
-//     selectedPathIds: [],
-//     selectedPointIndices: [],
-//     ...selection,
-//   };
-
-//   if (existingSelection) {
-//     existingSelection.update(selectionData);
-//   } else {
-//     this.userSelections.addItem(selectionData);
-//   }
-// }
-
-// getUserSelection(userId: string): UserSelection | undefined {
-//   const ySelection = this.userSelections.find(
-//     (sel) => sel.get("userId") === userId
-//   );
-//   return ySelection
-//     ? (ySelection.toObjectSafe() as UserSelection)
-//     : undefined;
-// }
-
-// clearUserSelection(userId: string): boolean {
-//   return this.userSelections.removeWhere(
-//     (sel) => sel.get("userId") === userId
-//   );
-// }
-
-// private clearLayerFromSelections(layerId: string): void {
-//   this.userSelections.toArray().forEach((selection) => {
-//     if (selection.get("selectedLayerId") === layerId) {
-//       selection.set("selectedLayerId", null);
-//       selection.set("selectedPathIds", []);
-//       selection.set("selectedPointIndices", []);
-//     }
-//   });
-// }
