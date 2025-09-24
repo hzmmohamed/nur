@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Layer } from "@/lib/data-model/types";
-import { VideoEditingProject } from "./impl-yjs";
+import { VideoEditingProject } from "./impl-yjs-v2";
 /**
  * Custom hook for reactively reading all layers from a VideoEditingProject instance.
  * Automatically updates when the underlying Yjs document changes.
@@ -170,7 +170,7 @@ export function useLayerManager(project: VideoEditingProject | null) {
         // This would be better if we added updateLayer to the ILayerManager interface
         const layer = project.getLayer(layerId);
         if (!layer) return false;
-        
+
         project.updateLayer(layerId, updates);
         return true;
       } catch (error) {
@@ -226,3 +226,6 @@ export function useLayerCount(project: VideoEditingProject | null): number {
 
   return count;
 }
+
+
+

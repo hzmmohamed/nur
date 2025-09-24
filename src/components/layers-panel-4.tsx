@@ -44,7 +44,7 @@ import {
 import { Input } from "./ui/input";
 import type { Layer } from "@/lib/data-model/types";
 import { useAllLayers, useLayerManager } from "@/lib/data-model/hooks";
-import type { VideoEditingProject } from "@/lib/data-model/impl-yjs";
+import type { VideoEditingProject } from "@/lib/data-model/impl-yjs-v2";
 
 interface SortableLayerItemProps {
   layer: Layer;
@@ -107,9 +107,7 @@ function SortableLayerItem({
         ref={setNodeRef}
         style={style}
         className={`group flex items-center h-8 text-xs cursor-pointer transition-colors ${
-          isDragging
-            ? "opacity-50 bg-primary/20"
-            : "hover:bg-accent"
+          isDragging ? "opacity-50 bg-primary/20" : "hover:bg-accent"
         } ${layer.locked ? "bg-destructive/10" : ""} ${
           isSelected ? "bg-primary/30" : ""
         }`}
@@ -158,9 +156,7 @@ function SortableLayerItem({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="block truncate font-normal">
-              {layer.name}
-            </span>
+            <span className="block truncate font-normal">{layer.name}</span>
           )}
         </div>
 
@@ -197,9 +193,9 @@ function SortableLayerItem({
         <div className="w-4 flex justify-center opacity-0 group-hover:opacity-100">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-4 w-4 p-0"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -250,20 +246,11 @@ export default function LayersPanel({
   onLayerSelect,
 }: LayersPanelProps) {
   // Use reactive hook for reading layers
-  const {
-    layers,
-    isLoading,
-    error,
-    layerCount,
-    visibleCount,
-  } = useAllLayers(project);
+  const { layers, isLoading, error, layerCount, visibleCount } =
+    useAllLayers(project);
 
   // Use management hook for layer operations only
-  const {
-    addLayer,
-    removeLayer,
-    updateLayer,
-  } = useLayerManager(project);
+  const { addLayer, removeLayer, updateLayer } = useLayerManager(project);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -292,10 +279,12 @@ export default function LayersPanel({
 
         // Reorder the layers array
         const reorderedLayers = arrayMove(sortedLayers, oldIndex, newIndex);
-        
+
         // Note: In a real implementation, you'd want to update the layer order
         // in the data model by updating z-index or order properties
-        console.log("Layer reordering not fully implemented - needs z-index support");
+        console.log(
+          "Layer reordering not fully implemented - needs z-index support"
+        );
       }
     },
     [layerIds, sortedLayers]
@@ -338,18 +327,15 @@ export default function LayersPanel({
     [removeLayer, selectedLayerId, onLayerSelect]
   );
 
-  const handleAddLayer = useCallback(
-    async () => {
-      await addLayer({
-        name: `Layer ${layerCount + 1}`,
-        visible: true,
-        locked: false,
-        opacity: 1,
-        blendMode: "normal",
-      });
-    },
-    [addLayer, layerCount]
-  );
+  const handleAddLayer = useCallback(async () => {
+    await addLayer({
+      name: `Layer ${layerCount + 1}`,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: "normal",
+    });
+  }, [addLayer, layerCount]);
 
   const handleLayerSelect = useCallback(
     (layerId: string) => {
@@ -363,7 +349,9 @@ export default function LayersPanel({
   // Show loading state
   if (isLoading) {
     return (
-      <div className={`bg-sidebar text-sidebar-foreground text-xs ${className}`}>
+      <div
+        className={`bg-sidebar text-sidebar-foreground text-xs ${className}`}
+      >
         <div className="p-2 border-b border-sidebar-border">
           <h3 className="font-medium">Layers</h3>
         </div>
@@ -375,7 +363,9 @@ export default function LayersPanel({
   // Show error state
   if (error) {
     return (
-      <div className={`bg-sidebar text-sidebar-foreground text-xs ${className}`}>
+      <div
+        className={`bg-sidebar text-sidebar-foreground text-xs ${className}`}
+      >
         <div className="p-2 border-b border-sidebar-border">
           <h3 className="font-medium">Layers</h3>
         </div>
@@ -432,24 +422,29 @@ export default function LayersPanel({
       </div>
 
       {/* Blend Mode and Opacity Controls */}
-      <div className="p-2 border-b border-sidebar-border space-y-2">
+      <div className="p-2 border-b border-sidebar-border space-y-2 cursor-not-allowed">
         <div className="flex items-center gap-2">
           <span className="w-16 text-muted-foreground">Mode:</span>
-          <select className="flex-1 bg-sidebar-accent border border-sidebar-border rounded px-2 py-1 text-xs">
+          <select
+            disabled
+            className="cursor-not-allowed flex-1 text-muted-foreground bg-sidebar-accent border border-sidebar-border rounded px-2 py-1 text-xs"
+            // className="flex-1 bg-sidebar-accent border border-sidebar-border rounded px-2 py-1 text-xs"
+          >
             <option>Normal</option>
             <option>Multiply</option>
             <option>Screen</option>
             <option>Overlay</option>
           </select>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="cursor-not-allowed flex items-center gap-2">
           <span className="w-16 text-muted-foreground">Opacity:</span>
           <input
+            disabled
             type="range"
             min="0"
             max="100"
             defaultValue="100"
-            className="flex-1 h-1"
+            className="cursor-not-allowed 4flex-1 h-1"
           />
           <span className="w-8 text-right">100%</span>
         </div>

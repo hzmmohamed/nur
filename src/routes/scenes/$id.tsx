@@ -19,6 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import LayersPanel from "@/components/layers-panel-4";
+import UndoWidget from "@/components/undo-widget";
 // import type { timelineMachine } from "@/lib/timeline-machine";
 
 export const Route = createFileRoute("/scenes/$id")({
@@ -91,6 +92,7 @@ function RouteComponent() {
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={20}>
+        <UndoWidget project={projectRef} />
         <LayersPanel project={projectRef} />
       </ResizablePanel>
     </ResizablePanelGroup>

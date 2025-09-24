@@ -14,7 +14,7 @@ import { penToolMachine } from "./pen-tool/pen-tool-machine";
 import VectorDocument from "./masks.store";
 import type { IVideoEditingProject } from "./data-model/interface";
 import * as Y from "yjs";
-import { VideoEditingProject } from "./data-model/impl-yjs";
+import { VideoEditingProject } from "./data-model/impl-yjs-v2";
 type Context = {
   fps: number;
   sceneId: string;
