@@ -94,7 +94,7 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
       {/* Undo Button Group */}
       <div className="flex">
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={undo}
           disabled={!state.canUndo}
@@ -108,8 +108,8 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
           <Popover open={undoOpen} onOpenChange={setUndoOpen}>
             <PopoverTrigger asChild disabled={!state.canUndo}>
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="xs"
                 className="rounded-l-none px-1.5 py-1.5 h-8"
                 title="Undo History"
               >
@@ -155,7 +155,7 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
                           onMouseLeave={() => setHoveredUndoIndex(null)}
                           className={`
                             w-full text-left px-3 py-2 text-xs border-b border-border/50 last:border-b-0
-                            transition-colors hover:bg-muted focus:bg-muted focus:outline-none
+                            transition-colors hover:bg-muted focus:bg-muted focus:ghost-none
                             ${
                               hoveredUndoIndex !== null &&
                               index <= hoveredUndoIndex
@@ -230,7 +230,7 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
       {/* Redo Button Group */}
       <div className="flex relative">
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={redo}
           disabled={!state.canRedo}
@@ -244,8 +244,8 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
           <Popover open={redoOpen} onOpenChange={setRedoOpen}>
             <PopoverTrigger asChild disabled={!state.canRedo}>
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="xs"
                 className="rounded-l-none px-1.5 py-1.5 h-8"
                 title="Redo History"
               >
@@ -281,7 +281,7 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
                           onMouseLeave={() => setHoveredRedoIndex(null)}
                           className={`
                             w-full text-left px-3 py-2 text-xs border-b border-border/50 last:border-b-0
-                            transition-colors hover:bg-muted focus:bg-muted focus:outline-none
+                            transition-colors hover:bg-muted focus:bg-muted focus:ghost-none
                             ${
                               hoveredRedoIndex !== null &&
                               index <= hoveredRedoIndex
@@ -337,7 +337,7 @@ export function UndoWidget({ project, className = "" }: UndoWidgetProps) {
         {state.redoStackSize > 0 && (
           <Badge
             variant="secondary"
-            className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs flex items-center justify-center rounded-full"
+            className="absolute -top-1 -left-1 h-4 w-4 p-0 text-xs flex items-center justify-center rounded-full"
           >
             {state.redoStackSize > 99 ? "99+" : state.redoStackSize}
           </Badge>

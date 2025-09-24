@@ -83,7 +83,7 @@ function RouteComponent() {
             <div
               ref={containerRef}
               id="nur-canvas"
-              className="w-full h-full overflow-hidden"
+              className="w-full h-full overflow-hidden bg-background"
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -91,8 +91,7 @@ function RouteComponent() {
         </ResizablePanelGroup>
       </ResizablePanel>
       <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={20}>
-        <UndoWidget project={projectRef} />
+      <ResizablePanel defaultSize={20} className="bg-background">
         <LayersPanel project={projectRef} />
       </ResizablePanel>
     </ResizablePanelGroup>
@@ -105,8 +104,13 @@ const Toolbar = () => {
     snapshot.matches({ active: { mode: "editing" } })
   );
 
+  const projectRef = useSelector(
+    editorActorRef,
+    (state) => state.context.projectData
+  );
+
   return (
-    <div className="absolute top-2 left-2 flex gap-2 bg-card p-1 z-10 rounded-sm">
+    <div className="absolute top-2 left-2 flex gap-4 bg-card p-1 z-10 rounded-sm">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -126,6 +130,7 @@ const Toolbar = () => {
           <p>Pen Tool (P)</p>
         </TooltipContent>
       </Tooltip>
+      <UndoWidget project={projectRef} />
     </div>
   );
 };

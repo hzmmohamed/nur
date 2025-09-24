@@ -24,7 +24,7 @@ export const TimelinePanel = () => {
   return (
     <ResizablePanel defaultSize={25}>
       <div id="timeline-header" className="flex h-full flex-col">
-        <div className=" bg-background w-full h-16 flex flex-row justify-between items-center px-3 py-1">
+        <div className=" bg-sidebar w-full h-16 flex flex-row justify-between items-center px-3 py-1">
           <span className="text-md font-semibold">Timeline</span>
           <div className="flex gap-2 items-center">
             <ImportFramesButton size={"sm"} variant="secondary" />
