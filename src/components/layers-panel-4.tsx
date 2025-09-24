@@ -393,6 +393,7 @@ export default function LayersPanel({
             <Plus className="h-3 w-3" />
           </Button>
           <Button
+            disabled
             size="sm"
             variant="ghost"
             className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
@@ -401,6 +402,7 @@ export default function LayersPanel({
             <Folder className="h-3 w-3" />
           </Button>
           <Button
+            disabled
             size="sm"
             variant="ghost"
             className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
@@ -408,7 +410,7 @@ export default function LayersPanel({
           >
             <Square className="h-3 w-3" />
           </Button>
-          <Button
+          {/* <Button
             size="sm"
             variant="ghost"
             className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
@@ -417,7 +419,7 @@ export default function LayersPanel({
             title="Delete Layer"
           >
             <Trash2 className="h-3 w-3" />
-          </Button>
+          </Button> */}
         </div>
       </div>
 

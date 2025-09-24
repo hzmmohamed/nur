@@ -91,7 +91,7 @@ function RouteComponent() {
         </ResizablePanelGroup>
       </ResizablePanel>
       <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={20} className="bg-background">
+      <ResizablePanel defaultSize={20} className="bg-background flex flex-col justify-end">
         <LayersPanel project={projectRef} />
       </ResizablePanel>
     </ResizablePanelGroup>
