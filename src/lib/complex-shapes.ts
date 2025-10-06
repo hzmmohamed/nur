@@ -91,7 +91,6 @@ class BezierPointHandle {
       stroke: "#666",
       strokeWidth: 2,
       draggable: true,
-      hitStrokeWidth: 10, // Larger hit area for easier dragging
     });
 
     this.group.add(this.line);
@@ -562,6 +561,7 @@ class BezierPath {
   private _canSelect: boolean = true;
   private scaleHandler?: () => void;
   private baseStrokeWidth: number;
+  private _handleVisibilityMode: HandleVisibilityMode = "selected";
 
   constructor(
     points: Array<{
@@ -699,6 +699,9 @@ class BezierPath {
       () => this.onPointChange()
     );
 
+    // Apply path's handle visibility mode to new point
+    point.setHandleVisibilityMode(this._handleVisibilityMode);
+
     this._points.push(point);
     this.group.add(point.getGroup());
 
@@ -726,6 +729,9 @@ class BezierPath {
       true,
       () => this.onPointChange()
     );
+
+    // Apply path's handle visibility mode to new point
+    point.setHandleVisibilityMode(this._handleVisibilityMode);
 
     this._points.splice(index, 0, point);
     this.group.add(point.getGroup());
@@ -801,6 +807,15 @@ class BezierPath {
 
   public hideAllHandles(): void {
     this.showAllHandles(false);
+  }
+
+  public setHandleVisibilityMode(mode: HandleVisibilityMode): void {
+    this._handleVisibilityMode = mode;
+    this._points.forEach((point) => point.setHandleVisibilityMode(mode));
+  }
+
+  public getHandleVisibilityMode(): HandleVisibilityMode {
+    return this._handleVisibilityMode;
   }
 
   public setClosed(closed: boolean): void {
