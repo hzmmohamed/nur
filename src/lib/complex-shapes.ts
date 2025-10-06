@@ -43,6 +43,11 @@ interface Position {
   y: number;
 }
 
+interface HandleData {
+  angle: number; // In radians
+  distance: number;
+}
+
 interface ChangeCallback {
   (): void;
 }
@@ -54,7 +59,9 @@ class BezierPointHandle {
   private group: Konva.Group;
   private line: Konva.Line;
   private circle: Konva.Circle;
-  private _position: Position;
+  private _angle: number; // In radians
+  private _distance: number;
+  private _anchorPosition: Position;
   private _state: VisualState = "normal";
   private _type: HandleType;
   private _canHover: boolean = true;
@@ -63,15 +70,20 @@ class BezierPointHandle {
 
   constructor(
     type: HandleType,
-    position: Position,
+    angle: number,
+    distance: number,
     anchorPosition: Position,
     onChange?: ChangeCallback
   ) {
     this._type = type;
-    this._position = { ...position };
+    this._angle = angle;
+    this._distance = distance;
+    this._anchorPosition = { ...anchorPosition };
     this.onChange = onChange;
 
     this.group = new Konva.Group();
+
+    const position = this.polarToCartesian();
 
     // Create line from anchor to handle
     this.line = new Konva.Line({
@@ -98,6 +110,25 @@ class BezierPointHandle {
 
     this.setupEventHandlers();
     this.updateVisualState();
+  }
+
+  private polarToCartesian(): Position {
+    return {
+      x: this._anchorPosition.x + Math.cos(this._angle) * this._distance,
+      y: this._anchorPosition.y + Math.sin(this._angle) * this._distance,
+    };
+  }
+
+  private cartesianToPolar(position: Position): {
+    angle: number;
+    distance: number;
+  } {
+    const dx = position.x - this._anchorPosition.x;
+    const dy = position.y - this._anchorPosition.y;
+    return {
+      angle: Math.atan2(dy, dx),
+      distance: Math.sqrt(dx * dx + dy * dy),
+    };
   }
 
   private setupEventHandlers(): void {
@@ -130,7 +161,9 @@ class BezierPointHandle {
     // Drag only works on circle
     this.circle.on("dragmove", () => {
       const pos = this.circle.position();
-      this._position = { x: pos.x, y: pos.y };
+      const polar = this.cartesianToPolar(pos);
+      this._angle = polar.angle;
+      this._distance = polar.distance;
       this.updateLinePosition();
       if (this.onChange) {
         this.onChange();
@@ -161,33 +194,55 @@ class BezierPointHandle {
   }
 
   private updateLinePosition(): void {
+    const position = this.polarToCartesian();
     const points = this.line.points();
-    this.line.points([
-      points[0],
-      points[1],
-      this._position.x,
-      this._position.y,
-    ]);
+    this.line.points([points[0], points[1], position.x, position.y]);
+    this.circle.position(position);
   }
 
   public updateAnchorPosition(anchorPosition: Position): void {
+    this._anchorPosition = { ...anchorPosition };
+    const position = this.polarToCartesian();
     const points = this.line.points();
     this.line.points([
       anchorPosition.x,
       anchorPosition.y,
-      points[2],
-      points[3],
+      position.x,
+      position.y,
     ]);
+    this.circle.position(position);
   }
 
-  public updatePosition(position: Position): void {
-    this._position = { ...position };
-    this.circle.position(position);
+  public setAngle(angle: number): void {
+    this._angle = angle;
     this.updateLinePosition();
   }
 
+  public setDistance(distance: number): void {
+    this._distance = distance;
+    this.updateLinePosition();
+  }
+
+  public setAngleAndDistance(angle: number, distance: number): void {
+    this._angle = angle;
+    this._distance = distance;
+    this.updateLinePosition();
+  }
+
+  public getAngle(): number {
+    return this._angle;
+  }
+
+  public getDistance(): number {
+    return this._distance;
+  }
+
   public getPosition(): Position {
-    return { ...this._position };
+    return this.polarToCartesian();
+  }
+
+  public getType(): HandleType {
+    return this._type;
   }
 
   public setState(state: VisualState): void {
@@ -257,8 +312,10 @@ class BezierPoint {
 
   constructor(
     position: Position,
-    handleInOffset: Position = { x: -50, y: 0 },
-    handleOutOffset: Position = { x: 50, y: 0 },
+    handleInAngle: number = Math.PI, // Default: pointing left
+    handleInDistance: number = 50,
+    handleOutAngle: number = 0, // Default: pointing right
+    handleOutDistance: number = 50,
     showHandles: boolean = true,
     onChange?: ChangeCallback
   ) {
@@ -284,19 +341,18 @@ class BezierPoint {
     if (showHandles) {
       this._handleIn = new BezierPointHandle(
         "handle-in",
-        { x: position.x + handleInOffset.x, y: position.y + handleInOffset.y },
+        handleInAngle,
+        handleInDistance,
         position,
-        () => this.onHandleChange()
+        () => this.onHandleChange("handle-in")
       );
 
       this._handleOut = new BezierPointHandle(
         "handle-out",
-        {
-          x: position.x + handleOutOffset.x,
-          y: position.y + handleOutOffset.y,
-        },
+        handleOutAngle,
+        handleOutDistance,
         position,
-        () => this.onHandleChange()
+        () => this.onHandleChange("handle-out")
       );
 
       this.group.add(this._handleIn.getGroup());
@@ -371,22 +427,12 @@ class BezierPoint {
 
       this._position = { x: pos.x, y: pos.y };
 
-      // Update handle positions
+      // Update handle anchor positions (they maintain their angle and distance)
       if (this._handleIn) {
-        const handleInPos = this._handleIn.getPosition();
-        this._handleIn.updatePosition({
-          x: handleInPos.x + dx,
-          y: handleInPos.y + dy,
-        });
         this._handleIn.updateAnchorPosition(this._position);
       }
 
       if (this._handleOut) {
-        const handleOutPos = this._handleOut.getPosition();
-        this._handleOut.updatePosition({
-          x: handleOutPos.x + dx,
-          y: handleOutPos.y + dy,
-        });
         this._handleOut.updateAnchorPosition(this._position);
       }
 
@@ -396,7 +442,37 @@ class BezierPoint {
     });
   }
 
-  private onHandleChange(): void {
+  private onHandleChange(handleType: HandleType): void {
+    // When one handle is dragged, update the sibling handle's angle symmetrically
+    if (this._pointType === "smooth" || this._pointType === "mirrored") {
+      if (handleType === "handle-in" && this._handleIn && this._handleOut) {
+        const inAngle = this._handleIn.getAngle();
+        // Opposite angle is 180 degrees (π radians) away
+        this._handleOut.setAngle(inAngle + Math.PI);
+      } else if (
+        handleType === "handle-out" &&
+        this._handleIn &&
+        this._handleOut
+      ) {
+        const outAngle = this._handleOut.getAngle();
+        // Opposite angle is 180 degrees (π radians) away
+        this._handleIn.setAngle(outAngle + Math.PI);
+      }
+
+      // For mirrored type, also match the distance
+      if (this._pointType === "mirrored") {
+        if (handleType === "handle-in" && this._handleIn && this._handleOut) {
+          this._handleOut.setDistance(this._handleIn.getDistance());
+        } else if (
+          handleType === "handle-out" &&
+          this._handleIn &&
+          this._handleOut
+        ) {
+          this._handleIn.setDistance(this._handleOut.getDistance());
+        }
+      }
+    }
+
     if (this.onChange) {
       this.onChange();
     }
@@ -446,28 +522,15 @@ class BezierPoint {
   }
 
   public updatePosition(position: Position): void {
-    const dx = position.x - this._position.x;
-    const dy = position.y - this._position.y;
-
     this._position = { ...position };
     this.anchorCircle.position(position);
 
-    // Update handle positions
+    // Update handle anchor positions (they maintain their angle and distance)
     if (this._handleIn) {
-      const handleInPos = this._handleIn.getPosition();
-      this._handleIn.updatePosition({
-        x: handleInPos.x + dx,
-        y: handleInPos.y + dy,
-      });
       this._handleIn.updateAnchorPosition(this._position);
     }
 
     if (this._handleOut) {
-      const handleOutPos = this._handleOut.getPosition();
-      this._handleOut.updatePosition({
-        x: handleOutPos.x + dx,
-        y: handleOutPos.y + dy,
-      });
       this._handleOut.updateAnchorPosition(this._position);
     }
   }
@@ -566,8 +629,10 @@ class BezierPath {
   constructor(
     points: Array<{
       position: Position;
-      handleIn?: Position;
-      handleOut?: Position;
+      handleInAngle?: number;
+      handleInDistance?: number;
+      handleOutAngle?: number;
+      handleOutDistance?: number;
     }> = [],
     closed: boolean = false,
     stroke: string = "#000",
@@ -595,8 +660,10 @@ class BezierPath {
     points.forEach((pointData) => {
       this.addPoint(
         pointData.position,
-        pointData.handleIn,
-        pointData.handleOut
+        pointData.handleInAngle,
+        pointData.handleInDistance,
+        pointData.handleOutAngle,
+        pointData.handleOutDistance
       );
     });
 
@@ -688,13 +755,17 @@ class BezierPath {
 
   public addPoint(
     position: Position,
-    handleInOffset?: Position,
-    handleOutOffset?: Position
+    handleInAngle?: number,
+    handleInDistance?: number,
+    handleOutAngle?: number,
+    handleOutDistance?: number
   ): BezierPoint {
     const point = new BezierPoint(
       position,
-      handleInOffset,
-      handleOutOffset,
+      handleInAngle,
+      handleInDistance,
+      handleOutAngle,
+      handleOutDistance,
       true,
       () => this.onPointChange()
     );
@@ -719,13 +790,17 @@ class BezierPath {
   public insertPoint(
     index: number,
     position: Position,
-    handleInOffset?: Position,
-    handleOutOffset?: Position
+    handleInAngle?: number,
+    handleInDistance?: number,
+    handleOutAngle?: number,
+    handleOutDistance?: number
   ): BezierPoint {
     const point = new BezierPoint(
       position,
-      handleInOffset,
-      handleOutOffset,
+      handleInAngle,
+      handleInDistance,
+      handleOutAngle,
+      handleOutDistance,
       true,
       () => this.onPointChange()
     );
@@ -934,18 +1009,24 @@ const path1 = new BezierPath(
   [
     {
       position: { x: 100, y: 300 },
-      handleIn: { x: -50, y: 0 },
-      handleOut: { x: 50, y: 0 },
+      handleInAngle: Math.PI,      // pointing left
+      handleInDistance: 50,
+      handleOutAngle: 0,            // pointing right
+      handleOutDistance: 50,
     },
     {
       position: { x: 300, y: 150 },
-      handleIn: { x: -50, y: 50 },
-      handleOut: { x: 50, y: -50 },
+      handleInAngle: Math.PI * 0.75,  // pointing up-left
+      handleInDistance: 70,
+      handleOutAngle: Math.PI * -0.25, // pointing down-right
+      handleOutDistance: 70,
     },
     {
       position: { x: 500, y: 300 },
-      handleIn: { x: -50, y: 0 },
-      handleOut: { x: 50, y: 0 },
+      handleInAngle: Math.PI,      // pointing left
+      handleInDistance: 50,
+      handleOutAngle: 0,            // pointing right
+      handleOutDistance: 50,
     },
   ],
   false, // not closed
@@ -961,8 +1042,41 @@ const path2 = new BezierPath(
   [
     {
       position: { x: 600, y: 200 },
-      handleIn: { x: -30, y: -30 },
-      handleOut: { x: 30, y: 30 },
+      handleInAngle: Math.PI * 1.25,
+      handleInDistance: 42,
+      handleOutAngle: Math.PI * 0.25,
+      handleOutDistance: 42,
+    },
+    {
+      position: { x: 700, y: 250 },
+      handleInAngle: Math.PI * 0.75,
+      handleInDistance: 42,
+      handleOutAngle: Math.PI * -0.25,
+      handleOutDistance: 42,
+    },
+    {
+      position: { x: 650, y: 350 },
+      handleInAngle: 0,
+      handleInDistance: 30,
+      handleOutAngle: Math.PI,
+      handleOutDistance: 30,
+    },
+  ],
+  true, // closed
+  '#0066ff', // stroke color
+  2, // stroke width
+  'rgba(0, 102, 255, 0.1)' // fill color
+);
+
+layer.add(path2);
+
+// Example 3: Dynamically add points to a path
+const path3 = new BezierPath([], false, '#ff6600', 2);
+layer.add(path3);
+
+path3.addPoint({ x: 100, y: 450 });
+path3.addPoint({ x: 200, y: 400 }, Math.PI * 1.1, 50, Math.PI * -0.3, 50);
+path3.addPoint({ x: 300, y: 500 }, Math.PI * 0.8, 50, Math.PI * -0.2, 50);Out: { x: 30, y: 30 },
     },
     {
       position: { x: 700, y: 250 },
