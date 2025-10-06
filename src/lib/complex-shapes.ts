@@ -309,6 +309,8 @@ class BezierPoint {
   private _showHandles: boolean;
   private onChange?: ChangeCallback;
   private scaleHandler?: () => void;
+  private _handleInSymmetricEditingEnabled: boolean = true;
+  private _handleOutSymmetricEditingEnabled: boolean = true;
 
   constructor(
     position: Position,
@@ -443,8 +445,17 @@ class BezierPoint {
   }
 
   private onHandleChange(handleType: HandleType): void {
-    // When one handle is dragged, update the sibling handle's angle symmetrically
-    if (this._pointType === "smooth" || this._pointType === "mirrored") {
+    // Check if symmetric editing is enabled for this handle
+    const symmetricEnabled =
+      handleType === "handle-in"
+        ? this._handleInSymmetricEditingEnabled
+        : this._handleOutSymmetricEditingEnabled;
+
+    // Only apply symmetric updates if enabled and point type allows it
+    if (
+      symmetricEnabled &&
+      (this._pointType === "smooth" || this._pointType === "mirrored")
+    ) {
       if (handleType === "handle-in" && this._handleIn && this._handleOut) {
         const inAngle = this._handleIn.getAngle();
         // Opposite angle is 180 degrees (π radians) away
@@ -580,6 +591,28 @@ class BezierPoint {
 
   public getPointType(): PointType {
     return this._pointType;
+  }
+
+  public enableHandleSymmetricEditing(
+    handleType: HandleType,
+    enabled: boolean = true
+  ): void {
+    if (handleType === "handle-in") {
+      this._handleInSymmetricEditingEnabled = enabled;
+    } else if (handleType === "handle-out") {
+      this._handleOutSymmetricEditingEnabled = enabled;
+    }
+  }
+
+  public isHandleSymmetricEditingEnabled(handleType: HandleType): boolean {
+    return handleType === "handle-in"
+      ? this._handleInSymmetricEditingEnabled
+      : this._handleOutSymmetricEditingEnabled;
+  }
+
+  public enableAllHandlesSymmetricEditing(enabled: boolean = true): void {
+    this._handleInSymmetricEditingEnabled = enabled;
+    this._handleOutSymmetricEditingEnabled = enabled;
   }
 
   public enableHover(enable: boolean = true): void {
