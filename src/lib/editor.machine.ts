@@ -10,11 +10,13 @@ import { frameFetcherMachine } from "./frame-fetcher.machine";
 import Konva from "konva";
 import ShortcutManager from "@keybindy/core";
 import { generateSVGPath } from "./utils";
-import { penToolMachine } from "./pen-tool/pen-tool-machine";
 import VectorDocument from "./masks.store";
 import type { IVideoEditingProject } from "./data-model/interface";
 import * as Y from "yjs";
 import { VideoEditingProject } from "./data-model/impl-yjs-v2";
+import { penToolMachine } from "./pen-tool/machine-multiple";
+import { BezierLayer, BezierPath } from "./complex-shapes";
+
 type Context = {
   fps: number;
   sceneId: string;
@@ -22,9 +24,8 @@ type Context = {
   shortcutManager: ShortcutManager;
   layers: Record<string, Konva.Layer>;
   masksDocument: VectorDocument;
-  projectData: IVideoEditingProject;
+  projectRef: IVideoEditingProject;
 };
-
 const zoomHandlerSubscriber = fromCallback<
   { type: "" },
   Pick<Context, "stageRef">
@@ -149,7 +150,7 @@ export const editorMachine = createMachine({
       masks: new Konva.Layer({ id: "masks" }),
     },
     masksDocument: new VectorDocument(`masks-${sceneId}`),
-    projectData: new VideoEditingProject(
+    projectRef: new VideoEditingProject(
       new Y.Doc(),
       {},
       { persistenceKey: sceneId }
@@ -164,6 +165,12 @@ export const editorMachine = createMachine({
       input: ({ context: { sceneId } }) => ({
         sceneId,
       }),
+    },
+    {
+      src: fromCallback<{ type: "" }, { projectRef: VideoEditingProject }>(
+        ({ input }) => {}
+      ),
+      input: ({ context }) => ({ projectRef: context.projectRef }),
     },
     // { src: timelineMachine, id: "timeline", systemId: "timeline" },
   ],
@@ -187,6 +194,108 @@ export const editorMachine = createMachine({
 
               context.masksDocument.createLayer("test");
               context.stageRef?.add(context.layers.masks);
+
+              const layer = new BezierLayer();
+              context.stageRef?.add(layer);
+
+              // Inside your stage zoom handler
+              context.stageRef?.on("scaleChange", () => {
+                layer.batchDraw(); // Still necessary!
+              });
+              // Example 1: Create a simple bezier path with 3 points
+              const path1 = new BezierPath(
+                [
+                  {
+                    position: { x: 100, y: 300 },
+                    handleIn: { x: -50, y: 0 },
+                    handleOut: { x: 50, y: 0 },
+                  },
+                  {
+                    position: { x: 300, y: 150 },
+                    handleIn: { x: -50, y: 50 },
+                    handleOut: { x: 50, y: -50 },
+                  },
+                  {
+                    position: { x: 500, y: 300 },
+                    handleIn: { x: -50, y: 0 },
+                    handleOut: { x: 50, y: 0 },
+                  },
+                ],
+                false, // not closed
+                "#000", // stroke color
+                2 // stroke width
+              );
+
+              // Add the path's group to the layer
+              layer.add(path1);
+
+              // Example 2: Create a closed path (like a shape)
+              const path2 = new BezierPath(
+                [
+                  {
+                    position: { x: 600, y: 200 },
+                    handleIn: { x: -30, y: -30 },
+                    handleOut: { x: 30, y: 30 },
+                  },
+                  {
+                    position: { x: 700, y: 250 },
+                    handleIn: { x: -30, y: 30 },
+                    handleOut: { x: 30, y: -30 },
+                  },
+                  {
+                    position: { x: 650, y: 350 },
+                    handleIn: { x: 30, y: 0 },
+                    handleOut: { x: -30, y: 0 },
+                  },
+                ],
+                true, // closed
+                "#0066ff", // stroke color
+                2, // stroke width
+                "rgba(0, 102, 255, 0.1)" // fill color
+              );
+
+              layer.add(path2);
+
+              // Example 3: Dynamically add points to a path
+              const path3 = new BezierPath([], false, "#ff6600", 1);
+              layer.add(path3);
+
+              path3.addPoint({ x: 100, y: 450 });
+              path3.addPoint(
+                { x: 200, y: 400 },
+                { x: -40, y: 20 },
+                { x: 40, y: -20 }
+              );
+              path3.addPoint(
+                { x: 300, y: 500 },
+                { x: -40, y: -20 },
+                { x: 40, y: 20 }
+              );
+
+              // Example 4: Interact with points
+              // Select a point (shows handles if visibility mode is 'selected')
+              path1.selectPoint(1);
+
+              // Hide all handles
+              path2.hideAllHandles();
+
+              // Show handles for specific point
+              const points = path1.getPoints();
+              if (points.length > 0) {
+                points[0].setHandleVisibilityMode("always");
+              }
+
+              // Example 5: Get SVG path data
+              console.log("Path 1 SVG:", path1.toSVGPath());
+
+              // Example 6: Remove a point
+              // path3.removePoint(1);
+
+              // Example 7: Insert a point at specific index
+              // path1.insertPoint(1, { x: 200, y: 225 }, { x: -30, y: 0 }, { x: 30, y: 0 });
+
+              // Draw the layer
+              layer.draw();
             },
           ],
         },
@@ -319,30 +428,30 @@ export const editorMachine = createMachine({
                 }
               ),
             },
-            {
-              input: ({ context }) => ({ ...context }),
-              id: "shortcut-handler",
-              systemId: "shortcut-handler",
-              src: fromCallback<
-                { type: "" },
-                { shortcutManager: ShortcutManager }
-              >(({ input: { shortcutManager }, sendBack }) => {
-                shortcutManager.register(
-                  ["Space"],
-                  (e) => {
-                    if (e.type === "keydown") {
-                      sendBack({ type: "PANNING_MODE_ENABLED" });
-                    } else {
-                      sendBack({ type: "PANNING_MODE_DISABLED" });
-                    }
-                  },
-                  { preventDefault: true, hold: true }
-                );
-                shortcutManager.start();
+            // {
+            //   input: ({ context }) => ({ ...context }),
+            //   id: "shortcut-handler",
+            //   systemId: "shortcut-handler",
+            //   src: fromCallback<
+            //     { type: "" },
+            //     { shortcutManager: ShortcutManager }
+            //   >(({ input: { shortcutManager }, sendBack }) => {
+            //     shortcutManager.register(
+            //       ["Space"],
+            //       (e) => {
+            //         if (e.type === "keydown") {
+            //           sendBack({ type: "PANNING_MODE_ENABLED" });
+            //         } else {
+            //           sendBack({ type: "PANNING_MODE_DISABLED" });
+            //         }
+            //       },
+            //       { preventDefault: true, hold: true }
+            //     );
+            //     shortcutManager.start();
 
-                return () => shortcutManager.disableAll();
-              }),
-            },
+            //     return () => shortcutManager.disableAll();
+            //   }),
+            // },
           ],
           initial: "inactive",
           states: {
@@ -358,31 +467,47 @@ export const editorMachine = createMachine({
               entry: ({ context: { stageRef } }) => {
                 if (stageRef) {
                   stageRef.draggable(true);
+                  stageRef.on("dragend", (e) => {
+                    console.log(
+                      e.currentTarget.position(),
+                      e.currentTarget.x(),
+                      e.currentTarget.y()
+                    );
+                  });
                   stageRef.container().style.cursor = "grab";
                 }
               },
               exit: ({ context: { stageRef } }) => {
                 if (stageRef) {
                   stageRef.draggable(false);
+                  stageRef.off("dragend", (e) => {
+                    console.log(e.currentTarget.x(), e.currentTarget.y());
+                  });
                   stageRef.container().style.cursor = "auto";
                 }
               },
             },
           },
         },
-        mode: {
-          initial: "idle",
+        selectedTool: {
+          initial: "select",
           states: {
-            idle: {
+            select: {
               on: {
-                TOGGLE_PEN: "editing",
+                TOGGLE_PEN: "pen",
               },
             },
-            editing: {
+            pen: {
+              // invoke: {
+              //   src: penToolStateMachine,
+              //   input: ({ context }) => ({
+              //     penTool: new PenTool(context.stageRef, context.projectRef),
+              //   }),
+              // },
               on: {
-                TOGGLE_PEN: "idle",
+                TOGGLE_PEN: "select",
                 ZOOM_CHANGED: {
-                  actions: [forwardTo("bezier-machine")],
+                  // actions: [forwardTo("bezier-machine")],
                 },
                 PANNING_MODE_ENABLED: {
                   actions: [sendTo("bezier-machine", { type: "PAUSE" })],
@@ -394,25 +519,17 @@ export const editorMachine = createMachine({
               exit: ({ context }) => {
                 context.layers.currentMask.destroyChildren();
               },
-              invoke: {
-                src: penToolMachine,
-                id: "bezier-machine",
-                systemId: "bezier-machine",
-                input: ({ context }) => ({
-                  layerRef: context.layers.currentMask,
-                }),
-                onDone: {
-                  target: "idle",
-                  actions: [
-                    ({ event: { output }, context }) => {
-                      if (output.curve.length) {
-                        context.masksDocument.createCurve("test", output.curve);
-                        context.masksDocument.save();
-                      }
-                    },
-                  ],
+              invoke: [
+                {
+                  src: penToolMachine,
+                  id: "bezier-machine",
+                  systemId: "bezier-machine",
+                  input: ({ context }) => ({
+                    layerRef: context.layers.currentMask,
+                    project: context.projectRef,
+                  }),
                 },
-              },
+              ],
             },
           },
         },
