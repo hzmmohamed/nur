@@ -1,10 +1,42 @@
-import Konva from 'konva';
+import Konva from "konva";
+
+/**
+ * Bezier Path Classes for Konva.js
+ *
+ * A set of wrapper classes for building vector drawing tools with cubic Bezier curves,
+ * similar to Figma/Photoshop pen tools.
+ *
+ * Classes:
+ * - BezierPointHandle: Control handle (circle + line) for adjusting curve shape
+ * - BezierPoint: Anchor point with two handles (handle-in, handle-out)
+ * - BezierPath: Complete Bezier curve composed of multiple points
+ * - BezierLayer: Custom Konva.Layer that auto-initializes Bezier classes
+ *
+ * Key Features:
+ * - Automatic path updates when points/handles move (via callbacks)
+ * - Constant visual size regardless of zoom (requires stage.fire('scaleChange'))
+ * - Interactive states: normal, hovered, selected
+ * - Flexible handle visibility modes: always, selected, hidden
+ * - Dynamic point addition with auto-initialization
+ * - Hover highlights both handle circle and line; drag only from circle
+ * - Larger hit areas for easier interaction
+ *
+ * Usage:
+ *   const layer = new BezierLayer();
+ *   const path = new BezierPath([...points], false, '#000', 2);
+ *   layer.add(path); // Auto-initializes scale handling
+ *
+ *   // When zooming:
+ *   stage.scale({ x: scale, y: scale });
+ *   stage.fire('scaleChange'); // Required for constant visual size
+ *   layer.batchDraw();
+ */
 
 // Type definitions
-type VisualState = 'normal' | 'hovered' | 'selected';
-type HandleType = 'handle-in' | 'handle-out';
-type PointType = 'smooth' | 'mirrored' | 'disconnected' | 'corner';
-type HandleVisibilityMode = 'always' | 'selected' | 'hidden';
+type VisualState = "normal" | "hovered" | "selected";
+type HandleType = "handle-in" | "handle-out";
+type PointType = "smooth" | "mirrored" | "disconnected" | "corner";
+type HandleVisibilityMode = "always" | "selected" | "hidden";
 
 interface Position {
   x: number;
@@ -23,7 +55,7 @@ class BezierPointHandle {
   private line: Konva.Line;
   private circle: Konva.Circle;
   private _position: Position;
-  private _state: VisualState = 'normal';
+  private _state: VisualState = "normal";
   private _type: HandleType;
   private _canHover: boolean = true;
   private _canSelect: boolean = true;
@@ -44,7 +76,7 @@ class BezierPointHandle {
     // Create line from anchor to handle
     this.line = new Konva.Line({
       points: [anchorPosition.x, anchorPosition.y, position.x, position.y],
-      stroke: '#666',
+      stroke: "#666",
       strokeWidth: 1,
       listening: true,
       hitStrokeWidth: 10, // Larger hitbox for easier hovering
@@ -55,10 +87,11 @@ class BezierPointHandle {
       x: position.x,
       y: position.y,
       radius: 5,
-      fill: '#fff',
-      stroke: '#666',
+      fill: "#fff",
+      stroke: "#666",
       strokeWidth: 2,
       draggable: true,
+      hitStrokeWidth: 10, // Larger hit area for easier dragging
     });
 
     this.group.add(this.line);
@@ -70,33 +103,33 @@ class BezierPointHandle {
 
   private setupEventHandlers(): void {
     // Hover on line - highlights both line and circle
-    this.line.on('mouseenter', () => {
+    this.line.on("mouseenter", () => {
       if (this._canHover) {
-        this.setState('hovered');
+        this.setState("hovered");
       }
     });
 
-    this.line.on('mouseleave', () => {
-      if (this._canHover && this._state === 'hovered') {
-        this.setState('normal');
+    this.line.on("mouseleave", () => {
+      if (this._canHover && this._state === "hovered") {
+        this.setState("normal");
       }
     });
 
     // Hover on circle - highlights both line and circle
-    this.circle.on('mouseenter', () => {
+    this.circle.on("mouseenter", () => {
       if (this._canHover) {
-        this.setState('hovered');
+        this.setState("hovered");
       }
     });
 
-    this.circle.on('mouseleave', () => {
-      if (this._canHover && this._state === 'hovered') {
-        this.setState('normal');
+    this.circle.on("mouseleave", () => {
+      if (this._canHover && this._state === "hovered") {
+        this.setState("normal");
       }
     });
 
     // Drag only works on circle
-    this.circle.on('dragmove', () => {
+    this.circle.on("dragmove", () => {
       const pos = this.circle.position();
       this._position = { x: pos.x, y: pos.y };
       this.updateLinePosition();
@@ -107,19 +140,19 @@ class BezierPointHandle {
   }
 
   private updateVisualState(): void {
-    let circleStroke = '#666';
-    let circleFill = '#fff';
-    let lineStroke = '#666';
+    let circleStroke = "#666";
+    let circleFill = "#fff";
+    let lineStroke = "#666";
 
     switch (this._state) {
-      case 'hovered':
-        circleStroke = '#0066ff';
-        lineStroke = '#0066ff';
+      case "hovered":
+        circleStroke = "#0066ff";
+        lineStroke = "#0066ff";
         break;
-      case 'selected':
-        circleStroke = '#0066ff';
-        circleFill = '#0066ff';
-        lineStroke = '#0066ff';
+      case "selected":
+        circleStroke = "#0066ff";
+        circleFill = "#0066ff";
+        lineStroke = "#0066ff";
         break;
     }
 
@@ -130,12 +163,22 @@ class BezierPointHandle {
 
   private updateLinePosition(): void {
     const points = this.line.points();
-    this.line.points([points[0], points[1], this._position.x, this._position.y]);
+    this.line.points([
+      points[0],
+      points[1],
+      this._position.x,
+      this._position.y,
+    ]);
   }
 
   public updateAnchorPosition(anchorPosition: Position): void {
     const points = this.line.points();
-    this.line.points([anchorPosition.x, anchorPosition.y, points[2], points[3]]);
+    this.line.points([
+      anchorPosition.x,
+      anchorPosition.y,
+      points[2],
+      points[3],
+    ]);
   }
 
   public updatePosition(position: Position): void {
@@ -167,15 +210,15 @@ class BezierPointHandle {
 
   public enableHover(enable: boolean = true): void {
     this._canHover = enable;
-    if (!enable && this._state === 'hovered') {
-      this.setState('normal');
+    if (!enable && this._state === "hovered") {
+      this.setState("normal");
     }
   }
 
   public enableSelect(enable: boolean = true): void {
     this._canSelect = enable;
-    if (!enable && this._state === 'selected') {
-      this.setState('normal');
+    if (!enable && this._state === "selected") {
+      this.setState("normal");
     }
   }
 
@@ -204,9 +247,9 @@ class BezierPoint {
   private _position: Position;
   private _handleIn?: BezierPointHandle;
   private _handleOut?: BezierPointHandle;
-  private _pointType: PointType = 'smooth';
-  private _state: VisualState = 'normal';
-  private _handleVisibilityMode: HandleVisibilityMode = 'selected';
+  private _pointType: PointType = "smooth";
+  private _state: VisualState = "normal";
+  private _handleVisibilityMode: HandleVisibilityMode = "selected";
   private _canHover: boolean = true;
   private _canSelect: boolean = true;
   private _showHandles: boolean;
@@ -231,26 +274,28 @@ class BezierPoint {
       x: position.x,
       y: position.y,
       radius: 6,
-      fill: '#fff',
-      stroke: '#000',
+      fill: "#fff",
+      stroke: "#000",
       strokeWidth: 2,
       draggable: true,
+      hitStrokeWidth: 10, // Larger hit area for easier dragging
     });
 
-    this.group.add(this.anchorCircle);
-
-    // Create handles if needed
+    // Create handles if needed (add them first so anchor renders on top)
     if (showHandles) {
       this._handleIn = new BezierPointHandle(
-        'handle-in',
+        "handle-in",
         { x: position.x + handleInOffset.x, y: position.y + handleInOffset.y },
         position,
         () => this.onHandleChange()
       );
 
       this._handleOut = new BezierPointHandle(
-        'handle-out',
-        { x: position.x + handleOutOffset.x, y: position.y + handleOutOffset.y },
+        "handle-out",
+        {
+          x: position.x + handleOutOffset.x,
+          y: position.y + handleOutOffset.y,
+        },
         position,
         () => this.onHandleChange()
       );
@@ -260,6 +305,9 @@ class BezierPoint {
 
       this.updateHandleVisibility();
     }
+
+    // Add anchor circle last so it renders on top
+    this.group.add(this.anchorCircle);
 
     this.setupEventHandlers();
     this.setupScaleListener();
@@ -272,20 +320,20 @@ class BezierPoint {
       if (stage) {
         const scale = stage.scaleX();
         const inverseScale = 1 / scale;
-        
+
         // Scale individual shapes, not the group
         this.anchorCircle.scaleX(inverseScale);
         this.anchorCircle.scaleY(inverseScale);
-        
+
         // Scale the handles
         if (this._handleIn) {
           this._handleIn.updateScale(inverseScale);
         }
-        
+
         if (this._handleOut) {
           this._handleOut.updateScale(inverseScale);
         }
-        
+
         const layer = this.group.getLayer();
         if (layer) {
           layer.batchDraw();
@@ -297,27 +345,27 @@ class BezierPoint {
   public initialize(): void {
     const stage = this.group.getStage();
     if (stage && this.scaleHandler) {
-      stage.on('scaleChange', this.scaleHandler);
+      stage.on("scaleChange", this.scaleHandler);
       this.scaleHandler(); // Apply initial scale
     }
-    
+
     // Don't initialize child handles - they're part of the same scaled group
   }
 
   private setupEventHandlers(): void {
-    this.anchorCircle.on('mouseenter', () => {
+    this.anchorCircle.on("mouseenter", () => {
       if (this._canHover) {
-        this.setState('hovered');
+        this.setState("hovered");
       }
     });
 
-    this.anchorCircle.on('mouseleave', () => {
-      if (this._canHover && this._state === 'hovered') {
-        this.setState('normal');
+    this.anchorCircle.on("mouseleave", () => {
+      if (this._canHover && this._state === "hovered") {
+        this.setState("normal");
       }
     });
 
-    this.anchorCircle.on('dragmove', () => {
+    this.anchorCircle.on("dragmove", () => {
       const pos = this.anchorCircle.position();
       const dx = pos.x - this._position.x;
       const dy = pos.y - this._position.y;
@@ -327,13 +375,19 @@ class BezierPoint {
       // Update handle positions
       if (this._handleIn) {
         const handleInPos = this._handleIn.getPosition();
-        this._handleIn.updatePosition({ x: handleInPos.x + dx, y: handleInPos.y + dy });
+        this._handleIn.updatePosition({
+          x: handleInPos.x + dx,
+          y: handleInPos.y + dy,
+        });
         this._handleIn.updateAnchorPosition(this._position);
       }
 
       if (this._handleOut) {
         const handleOutPos = this._handleOut.getPosition();
-        this._handleOut.updatePosition({ x: handleOutPos.x + dx, y: handleOutPos.y + dy });
+        this._handleOut.updatePosition({
+          x: handleOutPos.x + dx,
+          y: handleOutPos.y + dy,
+        });
         this._handleOut.updateAnchorPosition(this._position);
       }
 
@@ -350,16 +404,16 @@ class BezierPoint {
   }
 
   private updateVisualState(): void {
-    let stroke = '#000';
-    let fill = '#fff';
+    let stroke = "#000";
+    let fill = "#fff";
 
     switch (this._state) {
-      case 'hovered':
-        stroke = '#0066ff';
+      case "hovered":
+        stroke = "#0066ff";
         break;
-      case 'selected':
-        stroke = '#0066ff';
-        fill = '#0066ff';
+      case "selected":
+        stroke = "#0066ff";
+        fill = "#0066ff";
         break;
     }
 
@@ -372,12 +426,12 @@ class BezierPoint {
     if (!this._handleIn || !this._handleOut) return;
 
     switch (this._handleVisibilityMode) {
-      case 'always':
+      case "always":
         this._handleIn.show();
         this._handleOut.show();
         break;
-      case 'selected':
-        if (this._state === 'selected') {
+      case "selected":
+        if (this._state === "selected") {
           this._handleIn.show();
           this._handleOut.show();
         } else {
@@ -385,7 +439,7 @@ class BezierPoint {
           this._handleOut.hide();
         }
         break;
-      case 'hidden':
+      case "hidden":
         this._handleIn.hide();
         this._handleOut.hide();
         break;
@@ -402,13 +456,19 @@ class BezierPoint {
     // Update handle positions
     if (this._handleIn) {
       const handleInPos = this._handleIn.getPosition();
-      this._handleIn.updatePosition({ x: handleInPos.x + dx, y: handleInPos.y + dy });
+      this._handleIn.updatePosition({
+        x: handleInPos.x + dx,
+        y: handleInPos.y + dy,
+      });
       this._handleIn.updateAnchorPosition(this._position);
     }
 
     if (this._handleOut) {
       const handleOutPos = this._handleOut.getPosition();
-      this._handleOut.updatePosition({ x: handleOutPos.x + dx, y: handleOutPos.y + dy });
+      this._handleOut.updatePosition({
+        x: handleOutPos.x + dx,
+        y: handleOutPos.y + dy,
+      });
       this._handleOut.updateAnchorPosition(this._position);
     }
   }
@@ -462,15 +522,15 @@ class BezierPoint {
 
   public enableHover(enable: boolean = true): void {
     this._canHover = enable;
-    if (!enable && this._state === 'hovered') {
-      this.setState('normal');
+    if (!enable && this._state === "hovered") {
+      this.setState("normal");
     }
   }
 
   public enableSelect(enable: boolean = true): void {
     this._canSelect = enable;
-    if (!enable && this._state === 'selected') {
-      this.setState('normal');
+    if (!enable && this._state === "selected") {
+      this.setState("normal");
     }
   }
 
@@ -481,7 +541,7 @@ class BezierPoint {
   public destroy(): void {
     const stage = this.group.getStage();
     if (stage && this.scaleHandler) {
-      stage.off('scaleChange', this.scaleHandler);
+      stage.off("scaleChange", this.scaleHandler);
     }
     this._handleIn?.destroy();
     this._handleOut?.destroy();
@@ -497,7 +557,7 @@ class BezierPath {
   private path: Konva.Line;
   private _points: BezierPoint[] = [];
   private _closed: boolean = false;
-  private _state: VisualState = 'normal';
+  private _state: VisualState = "normal";
   private _canHover: boolean = true;
   private _canSelect: boolean = true;
   private scaleHandler?: () => void;
@@ -510,7 +570,7 @@ class BezierPath {
       handleOut?: Position;
     }> = [],
     closed: boolean = false,
-    stroke: string = '#000',
+    stroke: string = "#000",
     strokeWidth: number = 2,
     fill?: string
   ) {
@@ -523,7 +583,7 @@ class BezierPath {
       points: [],
       stroke,
       strokeWidth,
-      fill: fill || '',
+      fill: fill || "",
       closed,
       bezier: true,
       listening: true,
@@ -533,7 +593,11 @@ class BezierPath {
 
     // Add initial points
     points.forEach((pointData) => {
-      this.addPoint(pointData.position, pointData.handleIn, pointData.handleOut);
+      this.addPoint(
+        pointData.position,
+        pointData.handleIn,
+        pointData.handleOut
+      );
     });
 
     this.setupEventHandlers();
@@ -547,10 +611,10 @@ class BezierPath {
       if (stage) {
         const scale = stage.scaleX();
         const inverseScale = 1 / scale;
-        
+
         // Scale the path stroke width to maintain consistent thickness
         this.path.strokeWidth(this.baseStrokeWidth * inverseScale);
-        
+
         const layer = this.group.getLayer();
         if (layer) {
           layer.batchDraw();
@@ -562,24 +626,24 @@ class BezierPath {
   public initialize(): void {
     const stage = this.group.getStage();
     if (stage && this.scaleHandler) {
-      stage.on('scaleChange', this.scaleHandler);
+      stage.on("scaleChange", this.scaleHandler);
       this.scaleHandler(); // Apply initial scale to stroke width
     }
-    
+
     // Initialize all child points
-    this._points.forEach(point => point.initialize());
+    this._points.forEach((point) => point.initialize());
   }
 
   private setupEventHandlers(): void {
-    this.path.on('mouseenter', () => {
+    this.path.on("mouseenter", () => {
       if (this._canHover) {
-        this.setState('hovered');
+        this.setState("hovered");
       }
     });
 
-    this.path.on('mouseleave', () => {
-      if (this._canHover && this._state === 'hovered') {
-        this.setState('normal');
+    this.path.on("mouseleave", () => {
+      if (this._canHover && this._state === "hovered") {
+        this.setState("normal");
       }
     });
   }
@@ -594,7 +658,8 @@ class BezierPath {
     this._points.forEach((point, index) => {
       const pos = point.getPosition();
       const handleOut = point.getHandleOutPosition();
-      const nextPoint = this._points[index + 1] || (this._closed ? this._points[0] : null);
+      const nextPoint =
+        this._points[index + 1] || (this._closed ? this._points[0] : null);
       const handleIn = nextPoint?.getHandleInPosition();
 
       if (index === 0) {
@@ -636,13 +701,13 @@ class BezierPath {
 
     this._points.push(point);
     this.group.add(point.getGroup());
-    
+
     // Initialize the point if the path is already on stage
     const stage = this.group.getStage();
     if (stage) {
       point.initialize();
     }
-    
+
     this.updatePath();
 
     return point;
@@ -664,13 +729,13 @@ class BezierPath {
 
     this._points.splice(index, 0, point);
     this.group.add(point.getGroup());
-    
+
     // Initialize the point if the path is already on stage
     const stage = this.group.getStage();
     if (stage) {
       point.initialize();
     }
-    
+
     this.updatePath();
 
     return point;
@@ -691,18 +756,18 @@ class BezierPath {
 
   public selectPoint(index: number): void {
     if (index >= 0 && index < this._points.length) {
-      this._points[index].setState('selected');
+      this._points[index].setState("selected");
     }
   }
 
   public deselectPoint(index: number): void {
     if (index >= 0 && index < this._points.length) {
-      this._points[index].setState('normal');
+      this._points[index].setState("normal");
     }
   }
 
   public deselectAllPoints(): void {
-    this._points.forEach((point) => point.setState('normal'));
+    this._points.forEach((point) => point.setState("normal"));
   }
 
   public setState(state: VisualState): void {
@@ -716,16 +781,16 @@ class BezierPath {
 
   public enableHover(enable: boolean = true): void {
     this._canHover = enable;
-    if (!enable && this._state === 'hovered') {
-      this.setState('normal');
+    if (!enable && this._state === "hovered") {
+      this.setState("normal");
     }
     this._points.forEach((point) => point.enableHover(enable));
   }
 
   public enableSelect(enable: boolean = true): void {
     this._canSelect = enable;
-    if (!enable && this._state === 'selected') {
-      this.setState('normal');
+    if (!enable && this._state === "selected") {
+      this.setState("normal");
     }
     this._points.forEach((point) => point.enableSelect(enable));
   }
@@ -749,12 +814,13 @@ class BezierPath {
   }
 
   public toSVGPath(): string {
-    let svgPath = '';
+    let svgPath = "";
 
     this._points.forEach((point, index) => {
       const pos = point.getPosition();
       const handleOut = point.getHandleOutPosition();
-      const nextPoint = this._points[index + 1] || (this._closed ? this._points[0] : null);
+      const nextPoint =
+        this._points[index + 1] || (this._closed ? this._points[0] : null);
       const handleIn = nextPoint?.getHandleInPosition();
 
       if (index === 0) {
@@ -773,7 +839,7 @@ class BezierPath {
     });
 
     if (this._closed) {
-      svgPath += 'Z';
+      svgPath += "Z";
     }
 
     return svgPath.trim();
@@ -786,7 +852,7 @@ class BezierPath {
   public destroy(): void {
     const stage = this.group.getStage();
     if (stage && this.scaleHandler) {
-      stage.off('scaleChange', this.scaleHandler);
+      stage.off("scaleChange", this.scaleHandler);
     }
     this._points.forEach((point) => point.destroy());
     this.group.destroy();
@@ -797,23 +863,35 @@ class BezierPath {
 // BezierLayer Class
 // ============================================================================
 class BezierLayer extends Konva.Layer {
-  public add(...children: (Konva.Node | BezierPath | BezierPoint | BezierPointHandle)[]): this {
-    children.forEach(child => {
-      if (child instanceof BezierPath || child instanceof BezierPoint || child instanceof BezierPointHandle) {
+  public add(
+    ...children: (Konva.Node | BezierPath | BezierPoint | BezierPointHandle)[]
+  ): this {
+    children.forEach((child) => {
+      if (
+        child instanceof BezierPath ||
+        child instanceof BezierPoint ||
+        child instanceof BezierPointHandle
+      ) {
         super.add(child.getGroup());
         child.initialize();
       } else {
         super.add(child);
       }
     });
-    
+
     return this;
   }
 }
 
 // Export classes
 export { BezierPointHandle, BezierPoint, BezierPath, BezierLayer };
-export type { VisualState, HandleType, PointType, HandleVisibilityMode, Position };
+export type {
+  VisualState,
+  HandleType,
+  PointType,
+  HandleVisibilityMode,
+  Position,
+};
 
 // ============================================================================
 // Example Usage
