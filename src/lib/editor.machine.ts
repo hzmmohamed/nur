@@ -37,25 +37,85 @@ const zoomHandlerSubscriber = fromCallback<
     const oldScale = stageRef.scaleX();
     const pointer = stageRef.getPointerPosition();
     if (pointer) {
-      const zoomFactor = event.evt.deltaY > 0 ? 0.9 : 1.1;
+      const zoomFactor = event.evt.deltaY > 0 ? 0.95 : 1.05;
       const newScale = Math.max(0.1, Math.min(oldScale * zoomFactor, 10));
       const newPos = {
         x: pointer.x - ((pointer.x - stageRef.x()) * newScale) / oldScale,
         y: pointer.y - ((pointer.y - stageRef.y()) * newScale) / oldScale,
       };
       stageRef.scale({ x: newScale, y: newScale });
+      stageRef.fire("scaleChange");
       stageRef.position({ x: newPos.x, y: newPos.y });
       // updateGrid();
-      stageRef.batchDraw(); // Optimize by redrawing all layers at once
+      // stageRef.batchDraw(); // Optimize by redrawing all layers at once
 
       // Send back scale change event
-      sendBack({ type: "ZOOM_CHANGE" });
+      sendBack({ type: "ZOOM_CHANGED" });
     }
   };
+
+  // Zoom function that maintains center point
+  const zoomToStageCenter = (scaleBy: number) => {
+    const oldScale = stageRef.scaleX();
+    const newScale = oldScale * scaleBy;
+
+    // Get the center point of the visible area
+    const stageBox = stageRef.container().getBoundingClientRect();
+    const centerX = stageBox.width / 2;
+    const centerY = stageBox.height / 2;
+
+    // Get the point in stage coordinates
+    const mousePointTo = {
+      x: centerX / oldScale - stageRef.x() / oldScale,
+      y: centerY / oldScale - stageRef.y() / oldScale,
+    };
+
+    // Calculate new position
+    const newPos = {
+      x: -(mousePointTo.x - centerX / newScale) * newScale,
+      y: -(mousePointTo.y - centerY / newScale) * newScale,
+    };
+
+    stageRef.scale({ x: newScale, y: newScale });
+    stageRef.position(newPos);
+    stageRef.batchDraw();
+  };
+
+  // Keyboard handler for zoom shortcuts
+  const handleKeyboard = (event: KeyboardEvent) => {
+    // Check if Ctrl (or Cmd on Mac) is pressed
+    if (event.ctrlKey || event.metaKey) {
+      // Ctrl + Plus or Ctrl + Equals (zoom in)
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomToStageCenter(1.1);
+        sendBack({ type: "ZOOM_CHANGED" });
+      }
+      // Ctrl + Minus (zoom out)
+      else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        zoomToStageCenter(0.9);
+        sendBack({ type: "ZOOM_CHANGED" });
+      }
+      // Ctrl + 0 (reset zoom)
+      else if (event.key === "0") {
+        event.preventDefault();
+        stageRef.scale({ x: 1, y: 1 });
+        stageRef.fire("scaleChange");
+        stageRef.position({ x: 0, y: 0 });
+        sendBack({ type: "ZOOM_CHANGED" });
+      }
+    }
+  };
+
+  // Register event listeners
   stageRef.on("wheel", handleZoom);
+  window.addEventListener("keydown", handleKeyboard);
+
+  // Cleanup function
   return () => {
-    // Clean up event listeners and destroy the stageRef
     stageRef.off("wheel", handleZoom);
+    window.removeEventListener("keydown", handleKeyboard);
   };
 });
 
