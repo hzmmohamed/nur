@@ -936,38 +936,6 @@ class BezierPath {
     return this._closed;
   }
 
-  public toSVGPath(): string {
-    let svgPath = "";
-
-    this._points.forEach((point, index) => {
-      const pos = point.getPosition();
-      const handleOut = point.getHandleOutPosition();
-      const nextPoint =
-        this._points[index + 1] || (this._closed ? this._points[0] : null);
-      const handleIn = nextPoint?.getHandleInPosition();
-
-      if (index === 0) {
-        svgPath += `M ${pos.x} ${pos.y} `;
-      }
-
-      if (nextPoint) {
-        const nextPos = nextPoint.getPosition();
-
-        if (handleOut && handleIn) {
-          svgPath += `C ${handleOut.x} ${handleOut.y}, ${handleIn.x} ${handleIn.y}, ${nextPos.x} ${nextPos.y} `;
-        } else {
-          svgPath += `L ${nextPos.x} ${nextPos.y} `;
-        }
-      }
-    });
-
-    if (this._closed) {
-      svgPath += "Z";
-    }
-
-    return svgPath.trim();
-  }
-
   public getGroup(): Konva.Group {
     return this.group;
   }

@@ -6,7 +6,7 @@ import type {
   LayerFrameMask,
   UserSelection,
   BezierPath,
-  Point,
+  BezierPoint,
 } from "./types"; // Assuming types are exported from a types file
 
 import {
@@ -379,7 +379,7 @@ export class VideoEditingProject {
     layerId: string,
     frameId: string,
     pathId: string,
-    point: Point
+    point: BezierPoint
   ): boolean {
     const paths = this.getLayerFrameMasks(layerId, frameId);
     const pathIndex = paths.findIndex((p) => p.id === pathId);
@@ -399,7 +399,7 @@ export class VideoEditingProject {
     frameId: string,
     pathId: string,
     pointIndex: number,
-    pointUpdate: Partial<Point>
+    pointUpdate: Partial<BezierPoint>
   ): boolean {
     const paths = this.getLayerFrameMasks(layerId, frameId);
     const pathIndex = paths.findIndex((p) => p.id === pathId);

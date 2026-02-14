@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import * as awarenessProtocol from "y-protocols/awareness";
 import { TypedYMap, TypedYArrayOfMaps } from "../yjs-utils/typed-wrappers";
 import {
-  type Point,
+  type BezierPoint,
   type BezierPath,
   type LayerFrameMask,
   type Frame,
@@ -871,7 +871,7 @@ export class VideoEditingProject implements IVideoEditingProject {
     layerId: string,
     frameId: string,
     pathId: string,
-    point: Point
+    point: BezierPoint
   ): boolean {
     const paths = this.getLayerFrameMasks(layerId, frameId);
     const pathIndex = paths.findIndex((p) => p.id === pathId);
@@ -891,7 +891,7 @@ export class VideoEditingProject implements IVideoEditingProject {
     frameId: string,
     pathId: string,
     pointIndex: number,
-    pointUpdate: Partial<Point>
+    pointUpdate: Partial<BezierPoint>
   ): boolean {
     const paths = this.getLayerFrameMasks(layerId, frameId);
     const pathIndex = paths.findIndex((p) => p.id === pathId);

@@ -1,7 +1,6 @@
 import {
   assign,
   createMachine,
-  forwardTo,
   fromCallback,
   sendTo,
   type ActorRefFromLogic,
@@ -16,6 +15,8 @@ import * as Y from "yjs";
 import { VideoEditingProject } from "./data-model/impl-yjs-v2";
 import { penToolMachine } from "./pen-tool/machine-multiple";
 import { BezierLayer, BezierPath } from "./complex-shapes";
+import { BezierSyncEngine } from "./sync-engine/engine";
+import { attemptAsync } from "es-toolkit";
 
 type Context = {
   fps: number;
@@ -194,6 +195,53 @@ export const editorMachine = createMachine({
 
               context.masksDocument.createLayer("test");
               context.stageRef?.add(context.layers.masks);
+
+              const layer = new BezierLayer();
+              context.stageRef?.add(layer);
+
+              const project = context.projectRef as VideoEditingProject;
+
+              // Create engine
+              const engine = new BezierSyncEngine({
+                layer,
+                project,
+              });
+
+              // Add a layer and frame
+              // const layer1 = project.addLayer({ name: "Layer 1" });
+              // const frame1 = project.addFrame({ index: 0 });
+
+              // Set active context
+              engine.setActiveLayerFrame(project.getAllLayers()[0].id, project.getAllFrames()[0].id);
+
+              // Array.from({ length: 10 }).forEach((_, i) => {
+              //   // Start drawing
+              //   const path = engine.startDrawingPath({
+              //     stroke: "#FF0000",
+              //     strokeWidth: 2,
+              //   });
+              //   // Add points
+              //   engine.addPointToPath(path.getPathId(), {
+              //     position: { x: i * 100, y: i * 100 },
+              //     handleIn: null,
+              //     handleOut: { angle: 0, distance: 50 },
+              //   });
+
+              //   engine.addPointToPath(path.getPathId(), {
+              //     position: { x: i * 200, y: i * 150 },
+              //     handleIn: { angle: Math.PI, distance: 50 },
+              //     handleOut: { angle: 0, distance: 50 },
+              //   });
+
+              //   engine.addPointToPath(path.getPathId(), {
+              //     position: { x: i * 300, y: i * 100 },
+              //     handleIn: { angle: Math.PI, distance: 50 },
+              //     handleOut: null,
+              //   });
+
+              //   // Finish
+              //   engine.finishDrawingPath();
+              // });
             },
           ],
         },

@@ -227,5 +227,45 @@ export function useLayerCount(project: VideoEditingProject | null): number {
   return count;
 }
 
+/**
+ * Hook for managing user layer selection through the project's awareness system
+ */
+export function useLayerSelection(
+  project: VideoEditingProject | null,
+  userId: string
+) {
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!project) {
+      setSelectedLayerId(null);
+      return;
+    }
 
+    // Get initial selection
+    const currentSelection = project.getUserSelection(userId);
+    setSelectedLayerId(currentSelection?.selectedLayerId || null);
+
+    // Subscribe to selection changes
+    const unsubscribe = project.onUserSelectionsChange((selections) => {
+      const userSelection = selections.find((s) => s.userId === userId);
+      setSelectedLayerId(userSelection?.selectedLayerId || null);
+    });
+
+    return unsubscribe;
+  }, [project, userId]);
+
+  const setSelectedLayer = useCallback(
+    (layerId: string | null) => {
+      if (!project) return;
+
+      project.setUserSelection(userId, { selectedLayerId: layerId });
+    },
+    [project, userId]
+  );
+
+  return {
+    selectedLayerId,
+    setSelectedLayer,
+  };
+}

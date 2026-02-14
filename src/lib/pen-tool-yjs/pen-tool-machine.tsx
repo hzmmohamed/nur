@@ -1,99 +1,13 @@
 import type Konva from "konva";
-import type { KonvaEventListener } from "konva/lib/Node";
-import type { Stage } from "konva/lib/Stage";
-import { assign, setup, fromCallback, log } from "xstate";
+import { assign, setup } from "xstate";
 import { rendererActor } from "./renderer";
-// Types
-interface Point {
-  x: number;
-  y: number;
-}
-
-// Helper functions
-const distance = (p1: Point, p2: Point) =>
-  Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-
-const angle = (p1: Point, p2: Point) => Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-const createSymmetricHandle = (
-  _: Point,
-  handleDirection: number,
-  length: number
-) => {
-  const handleOut = {
-    x: Math.cos(handleDirection) * length,
-    y: Math.sin(handleDirection) * length,
-  };
-  const handleIn = {
-    x: -handleOut.x,
-    y: -handleOut.y,
-  };
-  return { handleIn, handleOut };
-};
-
-// Canvas event handler actor
-const canvasEventActor = fromCallback<{ type: "" }, { layer: Konva.Layer }>(
-  ({ sendBack, input }) => {
-    const { layer } = input;
-    const stage = layer.getStage();
-
-    const handleMouseDown: KonvaEventListener<Stage, MouseEvent> = (e) => {
-      const point = e.currentTarget.getRelativePointerPosition();
-      sendBack({
-        type: "MOUSE_DOWN",
-        point,
-        altKey: e.evt.altKey,
-        shiftKey: e.evt.shiftKey,
-      });
-    };
-
-    const handleMouseMove: KonvaEventListener<Stage, MouseEvent> = (e) => {
-      const point = e.currentTarget.getRelativePointerPosition();
-      sendBack({
-        type: "MOUSE_MOVE",
-        point,
-        altKey: e.evt.altKey,
-        shiftKey: e.evt.shiftKey,
-      });
-    };
-
-    const handleMouseUp: KonvaEventListener<Stage, MouseEvent> = () => {
-      sendBack({ type: "MOUSE_UP" });
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z") {
-          e.preventDefault();
-          sendBack({ type: "UNDO" });
-        } else if (e.key === "y") {
-          e.preventDefault();
-          sendBack({ type: "REDO" });
-        }
-      } else {
-        sendBack({ type: "KEY_PRESS", key: e.key });
-      }
-    };
-
-    stage.on("mousemove", handleMouseMove);
-    stage.on("mouseup", handleMouseUp);
-    stage.on("mousedown", handleMouseDown);
-    window.addEventListener("keydown", handleKeyDown);
-    // window.addEventListener("resize", handleResize);
-
-    // Initialize canvas size
-    // handleResize();
-
-    // Cleanup function
-    return () => {
-      stage.off("mousemove", handleMouseMove);
-      stage.off("mouseup", handleMouseUp);
-      stage.off("mousedown", handleMouseDown);
-      window.removeEventListener("keydown", handleKeyDown);
-      //   window.removeEventListener("resize", handleResize);
-    };
-  }
-);
+import {
+  canvasEventActor,
+  distance,
+  angle,
+  createSymmetricHandle,
+} from "./utils";
+import { mouseCursorActor, mousePointActor } from "./mouse-cursor-actors";
 
 // Main state machine
 export const penToolMachine = setup({
@@ -126,10 +40,6 @@ export const penToolMachine = setup({
       | { type: "CLEAR_ALL" }
       | { type: "RESIZE_CANVAS"; size: { width: number; height: number } },
   },
-  actors: {
-    canvasEventActor,
-    rendererActor,
-  },
   actions: {
     setTool: assign({
       tool: ({ event }) => event.tool,
@@ -150,7 +60,6 @@ export const penToolMachine = setup({
       selectedPoint: ({ event }) => ({ pathIndex: -1, pointIndex: 0 }),
       dragStart: ({ event }) => event.point,
     }),
-
     addPointToCurrentPath: assign({
       currentPath: ({ context, event }) => ({
         ...context.currentPath,
@@ -485,6 +394,20 @@ export const penToolMachine = setup({
     previewPoint: null,
     mousePos: { x: 0, y: 0 },
   }),
+  invoke: [
+    {
+      src: mousePointActor,
+      input: ({ context }) => ({
+        layer: context.layer,
+      }),
+    },
+    {
+      src: mouseCursorActor,
+      input: ({ context }) => ({
+        layer: context.layer,
+      }),
+    },
+  ],
   states: {
     initializing: {
       always: {
@@ -494,15 +417,19 @@ export const penToolMachine = setup({
     ready: {
       invoke: [
         {
-          id: "canvasEvents",
-          systemId: "canvasEvents",
-          src: "canvasEventActor",
-          input: ({ context }) => ({ layer: context.layer }),
+          src: canvasEventActor,
+          input: ({ context }) => ({
+            layer: context.layer,
+            enableMouseDown: true,
+            enableMouseMove: true,
+            enableMouseUp: true,
+            enableKeyboard: true,
+          }),
         },
         {
           id: "renderer",
           systemId: "renderer",
-          src: "rendererActor",
+          src: rendererActor,
           input: ({ context }) => ({ layer: context.layer }),
         },
       ],
@@ -553,7 +480,7 @@ export const penToolMachine = setup({
               },
             ],
             UNDO: {
-              actions: ({context})=>console.log(context.history)
+              actions: ({ context }) => console.log(context.history),
               // guard: "canUndo",
               // actions: ["undo", "render"],
             },
@@ -658,4 +585,4 @@ export const penToolMachine = setup({
       },
     },
   },
-});
+})

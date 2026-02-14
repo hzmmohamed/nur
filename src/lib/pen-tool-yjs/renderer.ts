@@ -2,9 +2,7 @@ import { fromCallback } from "xstate";
 import Konva from "konva";
 
 // Renderer actor using Konva instead of canvas API
-export const rendererActor = fromCallback(({ receive, input ,system , emit, sendBack}) => {
-  emit({})
-  sendBack({})
+export const rendererActor = fromCallback(({ receive, input }) => {
   const { layer } = input;
   let currentState = null;
 

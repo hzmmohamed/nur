@@ -1,29 +1,27 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
-// Point with handles for cubic bezier curves
-export const PointSchema = z.object({
-  position: z.object({
-    x: z.number(),
-    y: z.number(),
-  }),
-  handleIn: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-    })
-    .nullable(), // null for first point in open paths
-  handleOut: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-    })
-    .nullable(), // null for last point in open paths
+const PointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+// New schema for polar handle representation
+const PolarHandleSchema = z.object({
+  angle: z.number(), // In radians
+  distance: z.number(), // Distance from anchor point
+});
+
+// Updated BezierPoint with polar handles
+export const BezierPointSchema = z.object({
+  position: PointSchema, // Anchor position stays cartesian (absolute)
+  handleIn: PolarHandleSchema.nullable(), // Now polar (relative)
+  handleOut: PolarHandleSchema.nullable(), // Now polar (relative)
 });
 
 // Cubic bezier path - collection of points
 export const BezierPathSchema = z.object({
   id: z.string(),
-  points: z.array(PointSchema),
+  points: z.array(BezierPointSchema),
   closed: z.boolean(), // true for complete masks, false while drawing/editing
   visible: z.boolean().default(true),
   name: z.string().optional(),
@@ -76,7 +74,7 @@ export const ProjectSchema = z.object({
 });
 
 // Type definitions
-export type Point = z.infer<typeof PointSchema>;
+export type BezierPoint = z.infer<typeof BezierPointSchema>;
 export type BezierPath = z.infer<typeof BezierPathSchema>;
 export type LayerFrameMask = z.infer<typeof LayerFrameMaskSchema>;
 export type Frame = z.infer<typeof FrameSchema>;

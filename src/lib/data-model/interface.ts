@@ -5,7 +5,7 @@ import type {
   LayerFrameMask,
   UserSelection,
   BezierPath,
-  Point,
+  BezierPoint,
 } from "./types";
 
 /**
@@ -204,7 +204,7 @@ export interface IMaskManager {
     layerId: string,
     frameId: string,
     pathId: string,
-    point: Point
+    point: BezierPoint
   ): boolean;
 
   /**
@@ -221,7 +221,7 @@ export interface IMaskManager {
     frameId: string,
     pathId: string,
     pointIndex: number,
-    pointUpdate: Partial<Point>
+    pointUpdate: Partial<BezierPoint>
   ): boolean;
 
   /**
@@ -284,3 +284,142 @@ export interface IVideoEditingProject
     ILayerManager,
     IMaskManager,
     ISelectionManager {}
+
+/**
+ * Interface for managing a single bezier path within a specific layer-frame combination
+ */
+export interface ISinglePathManager {
+  /**
+   * Updates the path's properties
+   * @param updates Partial path updates
+   * @returns True if path was updated successfully
+   */
+  updatePath(updates: Partial<BezierPath>): boolean;
+
+  /**
+   * Removes this path from the layer-frame combination
+   * @returns True if path was removed successfully
+   */
+  removePath(): boolean;
+
+  /**
+   * Gets the current state of this path
+   * @returns The bezier path if it exists, undefined otherwise
+   */
+  getPath(): BezierPath | undefined;
+
+  /**
+   * Adds a point to this path
+   * @param point The point to add
+   * @returns True if point was added successfully
+   */
+  addPoint(point: BezierPoint): boolean;
+
+  /**
+   * Updates a specific point in this path
+   * @param pointIndex The index of the point to update
+   * @param pointUpdate Partial point updates
+   * @returns True if point was updated successfully
+   */
+  updatePoint(pointIndex: number, pointUpdate: Partial<BezierPoint>): boolean;
+
+  /**
+   * Removes a point from this path
+   * @param pointIndex The index of the point to remove
+   * @returns True if point was removed successfully
+   */
+  removePoint(pointIndex: number): boolean;
+
+  /**
+   * Closes this path if it has enough points (minimum 3)
+   * @returns True if path was closed successfully
+   */
+  closePathIfValid(): boolean;
+
+  /**
+   * Gets the layer ID this path belongs to
+   */
+  getLayerId(): string;
+
+  /**
+   * Gets the frame ID this path belongs to
+   */
+  getFrameId(): string;
+
+  /**
+   * Gets the path ID
+   */
+  getPathId(): string;
+}
+
+/**
+ * Creates a single path manager interface for a specific path in a layer-frame combination
+ * @param maskManager The mask manager instance
+ * @param layerId The layer ID
+ * @param frameId The frame ID
+ * @param pathId The path ID
+ * @returns An ISinglePathManager instance bound to the specific path
+ */
+export function createSinglePathManager(
+  maskManager: IMaskManager,
+  layerId: string,
+  frameId: string,
+  pathId: string
+): ISinglePathManager {
+  return {
+    updatePath(updates: Partial<BezierPath>): boolean {
+      return maskManager.updatePath(layerId, frameId, pathId, updates);
+    },
+
+    removePath(): boolean {
+      return maskManager.removePath(layerId, frameId, pathId);
+    },
+
+    getPath(): BezierPath | undefined {
+      const paths = maskManager.getLayerFrameMasks(layerId, frameId);
+      return paths.find((path) => path.id === pathId);
+    },
+
+    addPoint(point: BezierPoint): boolean {
+      return maskManager.addPointToPath(layerId, frameId, pathId, point);
+    },
+
+    updatePoint(
+      pointIndex: number,
+      pointUpdate: Partial<BezierPoint>
+    ): boolean {
+      return maskManager.updatePointInPath(
+        layerId,
+        frameId,
+        pathId,
+        pointIndex,
+        pointUpdate
+      );
+    },
+
+    removePoint(pointIndex: number): boolean {
+      return maskManager.removePointFromPath(
+        layerId,
+        frameId,
+        pathId,
+        pointIndex
+      );
+    },
+
+    closePathIfValid(): boolean {
+      return maskManager.closePathIfValid(layerId, frameId, pathId);
+    },
+
+    getLayerId(): string {
+      return layerId;
+    },
+
+    getFrameId(): string {
+      return frameId;
+    },
+
+    getPathId(): string {
+      return pathId;
+    },
+  };
+}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -37,22 +37,19 @@ import {
   Plus,
   GripVertical,
   Video,
-  Link,
   Folder,
   Square,
+  Shapes,
 } from "lucide-react";
 import { Input } from "./ui/input";
 import type { Layer } from "@/lib/data-model/types";
-import {
-  useAllLayers,
-  useLayerManager,
-  useLayerSelection,
-} from "@/lib/data-model/hooks";
-import type { VideoEditingProject } from "@/lib/data-model/impl-yjs-v2";
+import { useLayerManager, useLayerSelection } from "@/lib/data-model/hooks";
+import type { BezierSyncEngine } from "@/lib/sync-engine/engine";
 
 interface SortableLayerItemProps {
   layer: Layer;
   isSelected?: boolean;
+  maskCount?: number;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onRename: (id: string, name: string) => void;
@@ -63,6 +60,7 @@ interface SortableLayerItemProps {
 function SortableLayerItem({
   layer,
   isSelected = false,
+  maskCount = 0,
   onToggleVisibility,
   onToggleLock,
   onRename,
@@ -126,6 +124,7 @@ function SortableLayerItem({
         >
           <GripVertical className="h-3 w-3" />
         </div>
+
         {/* Visibility Toggle */}
         <div className="w-6 flex justify-center">
           <Button
@@ -164,7 +163,15 @@ function SortableLayerItem({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="block truncate font-normal">{layer.name}</span>
+            <div className="flex items-center gap-1">
+              <span className="block truncate font-normal">{layer.name}</span>
+              {maskCount > 0 && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                  <Shapes className="h-2.5 w-2.5" />
+                  {maskCount}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -231,19 +238,21 @@ function SortableLayerItem({
 }
 
 interface LayersPanelProps {
-  project: VideoEditingProject | null;
+  syncEngine: BezierSyncEngine | null;
   userId?: string;
   className?: string;
-  selectedLayerId?: string | null;
-  onLayerSelect?: (layerId: string | null) => void;
 }
 
 export default function LayersPanel({
-  project,
+  syncEngine,
   className = "",
   userId = "default-user",
 }: LayersPanelProps) {
-  // Use separate hooks for different concerns
+  // Get project and current frame from sync engine
+  const project = syncEngine?.getProject() || null;
+  const currentFrameId = syncEngine?.getCurrentContext()?.getFrameId() || null;
+
+  // Layer management hooks
   const {
     layers,
     isLoading,
@@ -259,6 +268,67 @@ export default function LayersPanel({
     project,
     userId
   );
+
+  // Track mask counts per layer for current frame
+  const [layerMaskCounts, setLayerMaskCounts] = useState<
+    Record<string, number>
+  >({});
+
+  // Update mask counts when layers, frame, or project changes
+  useEffect(() => {
+    if (!project || !currentFrameId) {
+      setLayerMaskCounts({});
+      return;
+    }
+
+    const counts: Record<string, number> = {};
+
+    for (const layer of layers) {
+      const masks = project.getAllMasksForLayer(layer.id);
+      const frameMask = masks.find((m) => m.frameId === currentFrameId);
+      counts[layer.id] = frameMask?.paths.length || 0;
+    }
+
+    setLayerMaskCounts(counts);
+
+    // Subscribe to mask changes
+    const layerFrameMasks = project.ydoc.getArray("layerFrameMasks");
+    const observer = () => {
+      const newCounts: Record<string, number> = {};
+      for (const layer of layers) {
+        const masks = project.getAllMasksForLayer(layer.id);
+        const frameMask = masks.find((m) => m.frameId === currentFrameId);
+        newCounts[layer.id] = frameMask?.paths.length || 0;
+      }
+      setLayerMaskCounts(newCounts);
+    };
+
+    layerFrameMasks.observeDeep(observer);
+
+    return () => {
+      layerFrameMasks.unobserveDeep(observer);
+    };
+  }, [project, layers, currentFrameId]);
+
+  // Sync engine context when layer selection changes
+  useEffect(() => {
+    if (!syncEngine || !selectedLayerId || !currentFrameId) return;
+
+    try {
+      syncEngine.setActiveLayerFrame(selectedLayerId, currentFrameId);
+    } catch (error) {
+      console.error("Failed to set active layer-frame:", error);
+    }
+  }, [syncEngine, selectedLayerId, currentFrameId]);
+
+  // Update layer visibility in sync engine when layer visibility changes
+  useEffect(() => {
+    if (!syncEngine) return;
+
+    for (const layer of layers) {
+      syncEngine.updateLayerVisibility(layer.id, layer.visible);
+    }
+  }, [syncEngine, layers]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -303,9 +373,14 @@ export default function LayersPanel({
       const layer = layers.find((l) => l.id === id);
       if (layer && !layer.locked) {
         await updateLayer(id, { visible: !layer.visible });
+
+        // Update sync engine visibility
+        if (syncEngine) {
+          syncEngine.updateLayerVisibility(id, !layer.visible);
+        }
       }
     },
-    [layers, updateLayer]
+    [layers, updateLayer, syncEngine]
   );
 
   const handleToggleLock = useCallback(
@@ -324,27 +399,44 @@ export default function LayersPanel({
     },
     [updateLayer]
   );
+
   const handleDelete = useCallback(
     async (id: string) => {
       const success = await removeLayer(id);
-      if (success && selectedLayerId === id) {
-        setSelectedLayer(null);
+      if (success) {
+        // Clear selection if deleted layer was selected
+        if (selectedLayerId === id) {
+          setSelectedLayer(null);
+        }
+
+        // Remove from sync engine
+        if (syncEngine) {
+          syncEngine.removeLayerContexts(id);
+        }
       }
     },
-    [removeLayer, selectedLayerId, setSelectedLayer]
+    [removeLayer, selectedLayerId, setSelectedLayer, syncEngine]
   );
+
   const handleAddLayer = useCallback(async () => {
-    await addLayer({
+    const newLayer = await addLayer({
       name: `Layer ${layerCount + 1}`,
       visible: true,
       locked: false,
       opacity: 1,
       blendMode: "normal",
     });
-  }, [addLayer, layerCount]);
+
+    // Auto-select the new layer
+    if (newLayer) {
+      setSelectedLayer(newLayer.id);
+    }
+  }, [addLayer, layerCount, setSelectedLayer]);
+
   const handleLayerSelect = useCallback(
     (layerId: string) => {
-      setSelectedLayer(layerId === selectedLayerId ? null : layerId);
+      const newSelection = layerId === selectedLayerId ? null : layerId;
+      setSelectedLayer(newSelection);
     },
     [selectedLayerId, setSelectedLayer]
   );
@@ -413,16 +505,6 @@ export default function LayersPanel({
           >
             <Square className="h-3 w-3" />
           </Button>
-          {/* <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0 text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={() => selectedLayerId && handleDelete(selectedLayerId)}
-            disabled={!selectedLayerId}
-            title="Delete Layer"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button> */}
         </div>
       </div>
 
@@ -433,7 +515,6 @@ export default function LayersPanel({
           <select
             disabled
             className="cursor-not-allowed flex-1 text-muted-foreground bg-sidebar-accent border border-sidebar-border rounded px-2 py-1 text-xs"
-            // className="flex-1 bg-sidebar-accent border border-sidebar-border rounded px-2 py-1 text-xs"
           >
             <option>Normal</option>
             <option>Multiply</option>
@@ -449,7 +530,7 @@ export default function LayersPanel({
             min="0"
             max="100"
             defaultValue="100"
-            className="cursor-not-allowed 4flex-1 h-1"
+            className="cursor-not-allowed flex-1 h-1"
           />
           <span className="w-8 text-right">100%</span>
         </div>
@@ -471,6 +552,7 @@ export default function LayersPanel({
               <div className="text-center py-8 text-muted-foreground">
                 <Video className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-xs">No layers</p>
+                <p className="text-[10px] mt-1">Click + to add a layer</p>
               </div>
             ) : (
               sortedLayers.map((layer) => (
@@ -478,6 +560,7 @@ export default function LayersPanel({
                   key={layer.id}
                   layer={layer}
                   isSelected={selectedLayerId === layer.id}
+                  maskCount={layerMaskCounts[layer.id] || 0}
                   onToggleVisibility={handleToggleVisibility}
                   onToggleLock={handleToggleLock}
                   onRename={handleRename}
@@ -492,8 +575,19 @@ export default function LayersPanel({
 
       {/* Footer Info */}
       {layerCount > 0 && (
-        <div className="p-2 border-t border-sidebar-border text-muted-foreground text-[10px]">
-          {visibleCount}/{layerCount} visible
+        <div className="p-2 border-t border-sidebar-border text-muted-foreground text-[10px] space-y-0.5">
+          <div>
+            {visibleCount}/{layerCount} visible
+          </div>
+          {selectedLayerId && currentFrameId && (
+            <div className="flex items-center gap-1">
+              <Shapes className="h-2.5 w-2.5" />
+              <span>
+                {layerMaskCounts[selectedLayerId] || 0} mask
+                {layerMaskCounts[selectedLayerId] === 1 ? "" : "s"}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

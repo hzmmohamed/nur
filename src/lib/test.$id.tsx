@@ -6,7 +6,11 @@ import {
 } from "@/components/ui/resizable";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { editorMachine } from "@/lib/editor.machine";
 import { useSelector } from "@xstate/react";
+import { useRef, useEffect } from "react";
+import { createActor, type ActorRefFromLogic } from "xstate";
+import type { frameFetcherMachine } from "@/lib/frame-fetcher.machine";
 import { Button } from "@/components/ui/button";
 import { PenToolIcon } from "lucide-react";
 import {
@@ -14,29 +18,72 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import UndoWidget from "@/components/undo-widget";
-import { useBezierSyncEngine } from "@/lib/sync-engine";
-import { BezierLayer } from "@/lib/complex-shapes";
-import { VideoEditingProject } from "@/lib/data-model/impl-yjs-v2";
 import LayersPanel from "@/components/layers-panel-5";
-import * as Y from "yjs";
+import UndoWidget from "@/components/undo-widget";
+import { VideoEditingProject } from "@/lib/data-model/impl-yjs-v2";
+import { BezierSyncEngine } from "@/lib/sync-engine";
+import { BezierLayer } from "@/lib/complex-shapes";
 
-export const Route = createFileRoute("/scenes/$id")({
+export const Route = createFileRoute("/scenes/test/$id")({
   component: RouteComponent,
+  context: ({ params }) => {
+    // TODO: Pass scene id and cache size
+    const editorActor = createActor(editorMachine, {
+      input: {
+        sceneId: params.id,
+      },
+    });
+    editorActor.start();
+
+    const project = new VideoEditingProject(
+      new Y.Doc(),
+      {},
+      { persistenceKey: params.id }
+    );
+
+    const syncEngine = new BezierSyncEngine({
+      layer: new BezierLayer(),
+      project,
+    });
+
+    return {
+      editorActor,
+      frameFetcher: editorActor.system.get(
+        "frame-fetcher"
+      ) as ActorRefFromLogic<typeof frameFetcherMachine>,
+      syncEngine,
+      // timelineActor: editorActor.system.get("timeline") as ActorRefFromLogic<
+      //   typeof timelineMachine
+      // >,
+    };
+  },
+  onLeave: ({ context }) => {
+    context.editorActor.stop();
+  },
   loader: async ({ params, context: { store } }) => {
     const name = store.getCell("scenes", params.id, "name");
     if (!name) throw redirect({ to: "/" });
     return { crumb: name };
   },
 });
-const layer = new BezierLayer();
-const project = new VideoEditingProject(
-  new Y.Doc(),
-  {},
-  { persistenceKey: "2a3b15fe-8f92-4c1b-942b-c798874bea8f" }
-);
+
 function RouteComponent() {
-  const syncEngine = useBezierSyncEngine({ layer, project });
+  const editorActorRef = Route.useRouteContext().editorActor;
+  const syncEngine = Route.useRouteContext().syncEngine;
+  console.log("test")
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (containerRef.current) {
+      editorActorRef.send({
+        type: "CONTAINER_MOUNTED",
+        data: {
+          containerId: containerRef.current.id,
+        },
+      });
+    }
+  }, [editorActorRef, containerRef.current]);
+
   return (
     <ResizablePanelGroup direction="horizontal" className="h-full w-full">
       <ResizablePanel defaultSize={80}>
@@ -45,17 +92,15 @@ function RouteComponent() {
             defaultSize={75}
             className="flex items-center justify-center relative"
           >
-            {/* <Toolbar /> */}
+            <Toolbar />
             <div
-              // ref={containerRef}
+              ref={containerRef}
               id="nur-canvas"
               className="w-full h-full overflow-hidden bg-background"
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={25}>
-            {/* <TimelinePanel /> */}
-          </ResizablePanel>
+          <TimelinePanel />
         </ResizablePanelGroup>
       </ResizablePanel>
       <ResizableHandle withHandle />
@@ -70,7 +115,7 @@ function RouteComponent() {
 }
 
 const Toolbar = () => {
-  // const editorActorRef = Route.useRouteContext().editorActor;
+  const editorActorRef = Route.useRouteContext().editorActor;
   const projectRef = useSelector(
     editorActorRef,
     (state) => state.context.projectRef
