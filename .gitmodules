@@ -1,0 +1,3 @@
+[submodule ".agents/effect-yjs"]
+	path = .agents/effect-yjs
+	url = https://github.com/hzmmohamed/effect-yjs
