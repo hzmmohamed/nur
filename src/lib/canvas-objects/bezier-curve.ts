@@ -54,7 +54,7 @@ export class BezierPath {
     // Click on path line -> insert point
     this.pathLine.on("click", (e) => {
       e.cancelBubble = true
-      this.handlePathClick(e)
+      this.handlePathClick()
     })
 
     this.startStructuralLoop()
@@ -64,25 +64,21 @@ export class BezierPath {
   /** Subscribe to ids() atom — diff to create/destroy Konva objects */
   private startStructuralLoop(): void {
     const idsAtom = this.lens.ids()
-    // Read initial value and subscribe
-    this.currentIds = this.registry.get(idsAtom)
-    this.syncPointObjects(HashSet.empty(), this.currentIds)
 
     this.unsubscribeIds = this.registry.subscribe(idsAtom, (newIds) => {
       const oldIds = this.currentIds
       this.currentIds = newIds
       this.syncPointObjects(oldIds, newIds)
-    })
+    }, { immediate: true })
   }
 
   /** Subscribe to the whole list atom to rebuild SVG path on any change */
   private startPathRenderLoop(): void {
     const listAtom = this.lens.atom()
-    this.updatePathLine()
 
     this.unsubscribeList = this.registry.subscribe(listAtom, () => {
       this.updatePathLine()
-    })
+    }, { immediate: true })
   }
 
   /** Diff old vs new IDs, create/destroy point Konva objects */
@@ -257,7 +253,7 @@ export class BezierPath {
   }
 
   /** Handle click on the path line — insert a new point via de Casteljau */
-  private handlePathClick(_e: Konva.KonvaEventObject<MouseEvent>): void {
+  private handlePathClick(): void {
     const stage = this.layer.getStage()
     if (!stage) return
     const pos = stage.getPointerPosition()

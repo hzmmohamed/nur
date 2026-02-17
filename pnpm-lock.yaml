@@ -20,6 +20,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.1.1)
+      '@effect-atom/atom':
+        specifier: ^0.5.1
+        version: 0.5.1(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(effect@3.19.18)
       '@fontsource/albert-sans':
         specifier: ^5.2.6
         version: 5.2.6
@@ -102,8 +105,8 @@ importers:
         specifier: ^3.19.18
         version: 3.19.18
       effect-yjs:
-        specifier: ^0.0.0
-        version: 0.0.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))
+        specifier: ^0.1.0
+        version: 0.1.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))
       es-toolkit:
         specifier: ^1.39.10
         version: 1.39.10
@@ -2118,8 +2121,8 @@ packages:
     resolution: {integrity: sha512-sSuxWU5j5SR9QQji/o2qMvqRNYRDOcBTgsJ/DeCf4iSN4gW+gNMXM7wFIP+fdXZxoNiAnHUTGjCr+TSWXdRDKg==}
     engines: {node: '>=0.3.1'}
 
-  effect-yjs@0.0.0:
-    resolution: {integrity: sha512-o+CKod1Zs66C4GapH/bSWUWBRoEDGzt71Ig28gPVuDQ9bTkU4GqK6Xp2W3ffHxW1bV8H5wg0txeCtDDRdIthbw==}
+  effect-yjs@0.1.0:
+    resolution: {integrity: sha512-S0aqMj+keCcIfXwvFqo/ptaEM/7wrEKmcWb4tQBfm33a1RwqQn+KY/+I3Sv7nAKqeMccwS2IeDlvEcDNOoWZkg==}
 
   effect@3.19.18:
     resolution: {integrity: sha512-KlbNuYzzwpOpnpshIhjCaqweQkthAT1oVG61Z2wIHqo6Sb6n/+pgzFXyTvsLyxcx5Cg3aWaQXa0XQHMuzdVW4A==}
@@ -2466,6 +2469,11 @@ packages:
 
   lib0@0.2.114:
     resolution: {integrity: sha512-gcxmNFzA4hv8UYi8j43uPlQ7CGcyMJ2KQb5kZASw6SnAKAf10hK12i2fjrS3Cl/ugZa5Ui6WwIu1/6MIXiHttQ==}
+    engines: {node: '>=16'}
+    hasBin: true
+
+  lib0@0.2.117:
+    resolution: {integrity: sha512-DeXj9X5xDCjgKLU/7RR+/HQEVzuuEUiwldwOGsHK/sfAfELGWEyTcf0x+uOvCvK3O2zPmZePXWL85vtia6GyZw==}
     engines: {node: '>=16'}
     hasBin: true
 
@@ -3150,6 +3158,10 @@ packages:
 
   uuid@11.1.0:
     resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
+
+  uuid@13.0.0:
+    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
     hasBin: true
 
   vite-node@3.2.4:
@@ -5168,10 +5180,12 @@ snapshots:
 
   diff@8.0.2: {}
 
-  effect-yjs@0.0.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18)):
+  effect-yjs@0.1.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18)):
     dependencies:
       '@effect-atom/atom': 0.5.1(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(@effect/platform@0.94.5(effect@3.19.18))(@effect/rpc@0.73.2(@effect/platform@0.94.5(effect@3.19.18))(effect@3.19.18))(effect@3.19.18)
       effect: 3.19.18
+      uuid: 13.0.0
+      y-protocols: 1.0.6(yjs@13.6.29)
       yjs: 13.6.29
     transitivePeerDependencies:
       - '@effect/experimental'
@@ -5534,6 +5548,10 @@ snapshots:
       type-check: 0.4.0
 
   lib0@0.2.114:
+    dependencies:
+      isomorphic.js: 0.2.5
+
+  lib0@0.2.117:
     dependencies:
       isomorphic.js: 0.2.5
 
@@ -6089,6 +6107,8 @@ snapshots:
 
   uuid@11.1.0: {}
 
+  uuid@13.0.0: {}
+
   vite-node@3.2.4(@types/node@24.2.0)(jiti@2.5.1)(lightningcss@1.30.1)(tsx@4.20.3):
     dependencies:
       cac: 6.7.14
@@ -6225,6 +6245,11 @@ snapshots:
       lib0: 0.2.114
       yjs: 13.6.27
 
+  y-protocols@1.0.6(yjs@13.6.29):
+    dependencies:
+      lib0: 0.2.114
+      yjs: 13.6.29
+
   yallist@3.1.1: {}
 
   yallist@5.0.0: {}
@@ -6235,7 +6260,7 @@ snapshots:
 
   yjs@13.6.29:
     dependencies:
-      lib0: 0.2.114
+      lib0: 0.2.117
 
   yocto-queue@0.1.0: {}
 
