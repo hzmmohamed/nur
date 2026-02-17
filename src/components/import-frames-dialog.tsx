@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useParams } from "@tanstack/react-router";
 import { sortBy } from "es-toolkit";
-import { myStore, MyStoreReact } from "@/lib/store";
+import { scenesStore, SceneStoreReact } from "@/lib/scenes.store";
 import { Progress } from "./ui/progress";
 
 // Since this environment doesn't have a bundler, we will remove the imports
@@ -235,7 +235,7 @@ const directorySaveMachine = createMachine({
               total,
               context.iDBKeyPrefix
             );
-            myStore.setCell("scenes", context.iDBKeyPrefix, "framesCount", 240);
+            scenesStore.setCell("scenes", context.iDBKeyPrefix, "framesCount", 240);
           },
         },
         ERROR: {
@@ -407,7 +407,7 @@ export const ImportFramesButton = (
 ) => {
   const { id } = useParams({ from: "/scenes/$id" });
   const framesCount =
-    MyStoreReact.useCell("scenes", id, "framesCount", myStore) || 0;
+    SceneStoreReact.useCell("scenes", id, "framesCount", scenesStore) || 0;
   const [isOpen, setIsOpen] = useState(false);
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

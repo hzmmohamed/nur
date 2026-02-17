@@ -5,10 +5,10 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 import { Provider } from "tinybase/ui-react";
-import { myStore, MyStore } from "./lib/store";
+import { scenesStore } from "./lib/scenes.store";
 
 // Create a new router instance
-const router = createRouter({ routeTree, context: { store: myStore } });
+const router = createRouter({ routeTree, context: { store: scenesStore } });
 
 // Register the router instance for type safety
 declare module "@tanstack/react-router" {
@@ -24,7 +24,6 @@ if (!rootElement.innerHTML) {
   root.render(
     <StrictMode>
       <Provider>
-        <MyStore />
         <RouterProvider router={router} />
       </Provider>
     </StrictMode>

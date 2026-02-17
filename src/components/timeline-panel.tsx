@@ -10,8 +10,11 @@ import { atom, useAtom } from "jotai";
 import { ResizablePanel } from "./ui/resizable";
 import { MenuIcon } from "lucide-react";
 import { useParams, useRouteContext } from "@tanstack/react-router";
-import { myStore, MyStoreReact } from "@/lib/store";
+import { SceneStoreReact } from "@/lib/scenes.store";
 import { ImportFramesButton } from "./import-frames-dialog";
+import { preventKeyBoardScroll } from "@/lib/utils";
+import { Route } from "@/lib/test.$id";
+import { useSelector } from "@xstate/react";
 
 const zoomLevelAtom = atom<number>(1);
 export const TimelinePanel = () => {
@@ -20,33 +23,43 @@ export const TimelinePanel = () => {
     select: ({ frameFetcher }) => frameFetcher,
   });
 
+  const editorActorRef = Route.useRouteContext().editorActor;
+  const projectRef = useSelector(
+    editorActorRef,
+    (state) => state.context.projectRef
+  );
+
   return (
-    <ResizablePanel defaultSize={25}>
-      <div id="timeline-header" className="flex h-full flex-col">
-        <div className=" bg-background w-full h-16 flex flex-row justify-between items-center px-3 py-1">
-          <span className="text-md font-semibold">Timeline</span>
-          <div className="flex gap-2 items-center">
-            <ImportFramesButton size={"sm"} variant="secondary" />
-            <MenuIcon className="size-4" />
-          </div>
+    <div id="timeline-header" className="flex h-full flex-col">
+      <div className=" bg-sidebar w-full h-16 flex flex-row justify-between items-center px-3 py-1">
+        <span className="text-md font-semibold">Timeline</span>
+        <div className="flex gap-2 items-center">
+          <ImportFramesButton size={"sm"} variant="secondary" />
+          <MenuIcon className="size-4" />
         </div>
-        <Timeline
-          onScrub={(frame: number) => {
-            console.log(`Scrubbed to frame: ${frame}`);
-            framesFetcherActorRef.send({
-              type: "FETCH_FRAME",
-              key: frame,
-            });
-          }}
-        />
       </div>
-    </ResizablePanel>
+      <Timeline
+        onScrub={(frame: number) => {
+          console.log(`Scrubbed to frame: ${frame}`);
+
+          projectRef.setUserSelection("default-user", {
+            selectedFrameId: frame.toString(),
+          });
+
+          framesFetcherActorRef.send({
+            type: "FETCH_FRAME",
+            key: frame,
+          });
+        }}
+      />
+    </div>
   );
 };
 
 const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
   const { id } = useParams({ from: "/scenes/$id" });
-  const { fps, framesCount } = MyStoreReact.useRow("scenes", id, myStore);
+  const { store } = useRouteContext({ from: "__root__" });
+  const { fps, framesCount } = SceneStoreReact.useRow("scenes", id, store);
   const timelineLengthSeconds = (framesCount as number) / fps;
 
   // State for the current playback time in seconds
@@ -238,10 +251,12 @@ const Timeline = ({ onScrub }: { onScrub: (frameIndex: number) => void }) => {
               onMouseMove={handleMouseMove}
               onMouseDown={handleMouseDown}
               onMouseLeave={handleMouseLeave}
+              onKeyDown={preventKeyBoardScroll}
             >
               <div
                 ref={timelineContainerRef}
-                className="mx-8 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full  scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-card cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                className="ml-4 w-full h-full scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-[#d2d2d244] scrollbar-track-[#00000000] bg-card cursor-ew-resize overflow-x-scroll overflow-y-hidden"
+                onKeyDown={preventKeyBoardScroll}
               >
                 <canvas ref={canvasRef} />
               </div>

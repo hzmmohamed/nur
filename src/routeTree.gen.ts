@@ -9,48 +9,55 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as BezierTestRouteImport } from './routes/bezier-test'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ScenesIdRouteImport } from './routes/scenes/$id'
 
+const BezierTestRoute = BezierTestRouteImport.update({
+  id: '/bezier-test',
+  path: '/bezier-test',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ScenesIdRoute = ScenesIdRouteImport.update({
-  id: '/scenes/$id',
-  path: '/scenes/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/scenes/$id': typeof ScenesIdRoute
+  '/bezier-test': typeof BezierTestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/scenes/$id': typeof ScenesIdRoute
+  '/bezier-test': typeof BezierTestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/scenes/$id': typeof ScenesIdRoute
+  '/bezier-test': typeof BezierTestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/scenes/$id'
+  fullPaths: '/' | '/bezier-test'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/scenes/$id'
-  id: '__root__' | '/' | '/scenes/$id'
+  to: '/' | '/bezier-test'
+  id: '__root__' | '/' | '/bezier-test'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ScenesIdRoute: typeof ScenesIdRoute
+  BezierTestRoute: typeof BezierTestRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/bezier-test': {
+      id: '/bezier-test'
+      path: '/bezier-test'
+      fullPath: '/bezier-test'
+      preLoaderRoute: typeof BezierTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -58,19 +65,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/scenes/$id': {
-      id: '/scenes/$id'
-      path: '/scenes/$id'
-      fullPath: '/scenes/$id'
-      preLoaderRoute: typeof ScenesIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ScenesIdRoute: ScenesIdRoute,
+  BezierTestRoute: BezierTestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

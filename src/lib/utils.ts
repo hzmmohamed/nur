@@ -100,3 +100,45 @@ export const convertBitmapsToBase64 = async (
 
   return results;
 };
+
+export function preventKeyBoardScroll(e) {
+  var keys = [32, 33, 34, 35, 37, 38, 39, 40];
+  if (keys.includes(e.keyCode)) {
+    e.preventDefault();
+    return false;
+  }
+}
+
+// Types
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface BezierPoint {
+  anchor: Point;
+  control1: Point | null;
+  control2: Point | null;
+  type: "move" | "curve";
+}
+
+// Generate SVG path data from points
+export function generateSVGPath(points: BezierPoint[]) {
+  if (!points.length) return "";
+
+  let path = "";
+
+  points.forEach((point, index) => {
+    if (index === 0) {
+      path += `M ${point.anchor.x} ${point.anchor.y}`;
+    } else {
+      const prevPoint = points[index - 1];
+      const c1 = prevPoint.control2 || prevPoint.anchor;
+      const c2 = point.control1 || point.anchor;
+
+      path += ` C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${point.anchor.x} ${point.anchor.y}`;
+    }
+  });
+
+  return path;
+}

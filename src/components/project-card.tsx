@@ -9,13 +9,13 @@ import {
 } from "./ui/card";
 import { formatDate } from "@/lib/utils";
 import { Link, useRouteContext } from "@tanstack/react-router";
-import { MyStoreReact } from "@/lib/store";
+import { SceneStoreReact } from "@/lib/scenes.store";
 import { Badge } from "./ui/badge";
 
 export const ProjectCard = ({ sceneId }: { sceneId: string }) => {
   const { store } = useRouteContext({ from: "__root__" });
   const { canvasHeight, canvasWidth, fps, lastUpdatedAt, name, framesCount } =
-    MyStoreReact.useRow("scenes", sceneId, store);
+    SceneStoreReact.useRow("scenes", sceneId, store);
   return (
     <Link to="/scenes/$id" params={{ id: sceneId as string }}>
       <Card className="overflow-hidden shadow-md transition-transform hover:scale-105">

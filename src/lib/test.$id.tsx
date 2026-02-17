@@ -1,0 +1,151 @@
+import { TimelinePanel } from "@/components/timeline-panel";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { editorMachine } from "@/lib/editor.machine";
+import { useSelector } from "@xstate/react";
+import { useRef, useEffect } from "react";
+import { createActor, type ActorRefFromLogic } from "xstate";
+import type { frameFetcherMachine } from "@/lib/frame-fetcher.machine";
+import { Button } from "@/components/ui/button";
+import { PenToolIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import LayersPanel from "@/components/layers-panel-5";
+import UndoWidget from "@/components/undo-widget";
+import { VideoEditingProject } from "@/lib/data-model/impl-yjs-v2";
+import { BezierSyncEngine } from "@/lib/sync-engine";
+import { BezierLayer } from "@/lib/complex-shapes";
+
+export const Route = createFileRoute("/scenes/test/$id")({
+  component: RouteComponent,
+  context: ({ params }) => {
+    // TODO: Pass scene id and cache size
+    const editorActor = createActor(editorMachine, {
+      input: {
+        sceneId: params.id,
+      },
+    });
+    editorActor.start();
+
+    const project = new VideoEditingProject(
+      new Y.Doc(),
+      {},
+      { persistenceKey: params.id }
+    );
+
+    const syncEngine = new BezierSyncEngine({
+      layer: new BezierLayer(),
+      project,
+    });
+
+    return {
+      editorActor,
+      frameFetcher: editorActor.system.get(
+        "frame-fetcher"
+      ) as ActorRefFromLogic<typeof frameFetcherMachine>,
+      syncEngine,
+      // timelineActor: editorActor.system.get("timeline") as ActorRefFromLogic<
+      //   typeof timelineMachine
+      // >,
+    };
+  },
+  onLeave: ({ context }) => {
+    context.editorActor.stop();
+  },
+  loader: async ({ params, context: { store } }) => {
+    const name = store.getCell("scenes", params.id, "name");
+    if (!name) throw redirect({ to: "/" });
+    return { crumb: name };
+  },
+});
+
+function RouteComponent() {
+  const editorActorRef = Route.useRouteContext().editorActor;
+  const syncEngine = Route.useRouteContext().syncEngine;
+  console.log("test")
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (containerRef.current) {
+      editorActorRef.send({
+        type: "CONTAINER_MOUNTED",
+        data: {
+          containerId: containerRef.current.id,
+        },
+      });
+    }
+  }, [editorActorRef, containerRef.current]);
+
+  return (
+    <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+      <ResizablePanel defaultSize={80}>
+        <ResizablePanelGroup direction="vertical">
+          <ResizablePanel
+            defaultSize={75}
+            className="flex items-center justify-center relative"
+          >
+            <Toolbar />
+            <div
+              ref={containerRef}
+              id="nur-canvas"
+              className="w-full h-full overflow-hidden bg-background"
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <TimelinePanel />
+        </ResizablePanelGroup>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel
+        defaultSize={20}
+        className="bg-background flex flex-col justify-end"
+      >
+        <LayersPanel syncEngine={syncEngine} className="h-full" />
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+const Toolbar = () => {
+  const editorActorRef = Route.useRouteContext().editorActor;
+  const projectRef = useSelector(
+    editorActorRef,
+    (state) => state.context.projectRef
+  );
+  const isPentoolActive = useSelector(editorActorRef, (snapshot) =>
+    snapshot.matches({ active: { selectedTool: "pen" } })
+  );
+
+  return (
+    <div className="absolute top-2 left-2 flex gap-4 bg-card p-1 z-10 rounded-sm">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => editorActorRef.send({ type: "TOGGLE_PEN" })}
+            className={
+              isPentoolActive
+                ? "bg-accent-foreground text-accent hover:bg-accent-foreground hover:text-accent"
+                : ""
+            }
+          >
+            <PenToolIcon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Pen Tool (P)</p>
+        </TooltipContent>
+      </Tooltip>
+      <UndoWidget project={projectRef} />
+    </div>
+  );
+};
