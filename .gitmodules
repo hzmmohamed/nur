@@ -4,3 +4,6 @@
 [submodule ".agents/effect-atom"]
 	path = .agents/effect-atom
 	url = https://github.com/tim-smart/effect-atom
+[submodule ".agents/effect-machine"]
+	path = .agents/effect-machine
+	url = https://github.com/cevr/effect-machine
