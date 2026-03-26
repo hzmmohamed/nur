@@ -28,10 +28,12 @@
     "react-konva": "^19.0.7",
     "react-resizable-panels": "^3.0.4",
     "yjs": "^13.6.27",
+    "@tanstack/react-router": "^1.130.12",
     "y-indexeddb": "^9.0.12"
   },
   "devDependencies": {
     "@pandacss/dev": "^0.52.0",
+    "@tanstack/router-plugin": "^1.130.15",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",

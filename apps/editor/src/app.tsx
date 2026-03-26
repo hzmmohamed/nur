@@ -1,9 +1,14 @@
-import { css } from "../styled-system/css"
+import { RouterProvider, createRouter } from "@tanstack/react-router"
+import { routeTree } from "./routeTree.gen"
+
+const router = createRouter({ routeTree })
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router
+  }
+}
 
 export function App() {
-  return (
-    <div className={css({ display: "flex", alignItems: "center", justifyContent: "center", minH: "screen" })}>
-      <h1 className={css({ fontSize: "2xl", fontWeight: "bold" })}>NUR</h1>
-    </div>
-  )
+  return <RouterProvider router={router} />
 }
