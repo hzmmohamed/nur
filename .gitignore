@@ -41,3 +41,7 @@ styled-system/
 # pnpm per-package lockfiles
 packages/*/pnpm-lock.yaml
 apps/*/pnpm-lock.yaml
+
+# Playwright
+playwright-report/
+test-results/
