@@ -29,5 +29,15 @@ dist-ssr
 .direnv
 .envrc
 
-
+# Turbo
 .turbo
+
+# Panda CSS generated
+styled-system/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# pnpm per-package lockfiles
+packages/*/pnpm-lock.yaml
+apps/*/pnpm-lock.yaml
