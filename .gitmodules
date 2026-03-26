@@ -10,3 +10,6 @@
 [submodule ".agents/lalph"]
 	path = .agents/lalph
 	url = https://github.com/tim-smart/lalph
+[submodule ".agents/effect-smol"]
+	path = .agents/effect-smol
+	url = git@github.com:Effect-TS/effect-smol.git
