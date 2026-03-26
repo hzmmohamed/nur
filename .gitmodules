@@ -13,3 +13,6 @@
 [submodule ".agents/effect-smol"]
 	path = .agents/effect-smol
 	url = git@github.com:Effect-TS/effect-smol.git
+[submodule ".agents/effect"]
+	path = .agents/effect
+	url = git@github.com:Effect-TS/effect.git
