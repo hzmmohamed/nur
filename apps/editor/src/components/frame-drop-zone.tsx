@@ -2,6 +2,8 @@ import { useState, useCallback } from "react"
 import { css } from "../../styled-system/css"
 import { useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { importProgressAtom } from "../actors/import-manager"
+import { Text } from "@/components/ui/text"
+import { Spinner } from "@/components/ui/spinner"
 
 export function FrameDropZone(props: {
   onFilesSelected: (files: FileList) => void
@@ -64,13 +66,16 @@ export function FrameDropZone(props: {
       onClick={isImporting ? undefined : handleClick}
     >
       {isImporting ? (
-        <p className={css({ color: "fg.muted" })}>
-          Importing frames... {progress.completed}/{progress.total}
-        </p>
+        <>
+          <Spinner />
+          <Text color="fg.muted">
+            Importing frames... {progress.completed}/{progress.total}
+          </Text>
+        </>
       ) : (
-        <p className={css({ color: "fg.muted", textAlign: "center" })}>
+        <Text color="fg.muted" textAlign="center">
           Drop image files here or click to browse
-        </p>
+        </Text>
       )}
     </div>
   )

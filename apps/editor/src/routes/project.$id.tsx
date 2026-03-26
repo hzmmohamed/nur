@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { useRef, useState, useEffect, useCallback, useMemo } from "react"
 import { useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { css } from "../../styled-system/css"
+import { Center, Flex } from "../../styled-system/jsx"
 import { useProjectDoc } from "../hooks/use-project-doc"
 import { useCurrentFrame } from "../hooks/use-current-frame"
 import { FrameDropZone } from "../components/frame-drop-zone"
@@ -14,6 +15,10 @@ import {
   registerHotkeyContext,
   unregisterHotkeyContext,
 } from "../actors/hotkey-manager"
+import { Heading } from "@/components/ui/heading"
+import { Text } from "@/components/ui/text"
+import { Spinner } from "@/components/ui/spinner"
+import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -144,9 +149,9 @@ function ProjectEditorPage() {
 
   if (!ready) {
     return (
-      <div className={css({ display: "flex", justifyContent: "center", alignItems: "center", minH: "screen" })}>
-        <p>Loading project...</p>
-      </div>
+      <Center minH="screen">
+        <Spinner />
+      </Center>
     )
   }
 
@@ -158,17 +163,17 @@ function ProjectEditorPage() {
         display: "flex", alignItems: "center", gap: "4",
         px: "4", py: "2", borderBottom: "1px solid", borderColor: "border.default",
       })}>
-        <Link to="/" className={css({ color: "fg.muted", _hover: { color: "fg.default" } })}>
-          Back
-        </Link>
-        <h1 className={css({ fontSize: "lg", fontWeight: "medium" })}>{name}</h1>
-        <span className={css({ fontSize: "sm", color: "fg.muted" })}>
+        <Button variant="link" asChild>
+          <Link to="/">Back</Link>
+        </Button>
+        <Heading as="h1" size="lg">{name}</Heading>
+        <Text size="sm" color="fg.muted">
           {frameCount} frames
-        </span>
+        </Text>
         {frameCount > 0 && (
-          <span className={css({ fontSize: "sm", color: "fg.muted" })}>
+          <Text size="sm" color="fg.muted">
             Frame {currentFrame + 1} / {frameCount}
-          </span>
+          </Text>
         )}
       </header>
 
