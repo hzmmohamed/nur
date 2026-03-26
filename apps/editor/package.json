@@ -1,0 +1,41 @@
+{
+  "name": "@nur/editor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "prepare": "panda codegen"
+  },
+  "dependencies": {
+    "@nur/core": "workspace:*",
+    "@nur/pen-tool": "workspace:*",
+    "@nur/design-system": "workspace:*",
+    "@nur/object-store": "workspace:*",
+    "@nur/renderer": "workspace:*",
+    "@ark-ui/react": "^5.0.0",
+    "@park-ui/panda-preset": "^0.42.0",
+    "effect": "^3.19.18",
+    "effect-yjs": "^0.1.0",
+    "@effect-atom/atom": "^0.5.1",
+    "konva": "^9.3.22",
+    "lucide-react": "^0.536.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-konva": "^19.0.7",
+    "react-resizable-panels": "^3.0.4",
+    "yjs": "^13.6.27",
+    "y-indexeddb": "^9.0.12"
+  },
+  "devDependencies": {
+    "@pandacss/dev": "^0.52.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}
