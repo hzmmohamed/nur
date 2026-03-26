@@ -1,0 +1,28 @@
+{
+  "name": "@nur/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "effect": "^3.19.18",
+    "effect-yjs": "^0.1.0",
+    "@effect-atom/atom": "^0.5.1",
+    "yjs": "^13.6.27",
+    "y-indexeddb": "^9.0.12"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vitest": "^3.2.4",
+    "@effect/vitest": "^0.25.1"
+  }
+}
