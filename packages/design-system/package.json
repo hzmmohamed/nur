@@ -1,0 +1,33 @@
+{
+  "name": "@nur/design-system",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./styled-system/*": {
+      "types": "./styled-system/*.d.ts",
+      "default": "./styled-system/*.mjs"
+    }
+  },
+  "scripts": {
+    "prepare": "panda codegen",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ark-ui/react": "^5.0.0",
+    "@park-ui/panda-preset": "^0.42.0",
+    "lucide-react": "^0.536.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@pandacss/dev": "^0.52.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "typescript": "~5.8.3"
+  }
+}
