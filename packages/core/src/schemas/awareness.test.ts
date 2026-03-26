@@ -37,4 +37,30 @@ describe("AwarenessSchema", () => {
     handle.local.focus("currentFrame").syncSet(5)
     expect(handle.local.focus("currentFrame").syncGet()).toBe(5)
   })
+
+  it("rejects negative frame index", () => {
+    const doc = new Y.Doc()
+    const handle = YAwareness.make(AwarenessSchema, doc)
+    expect(() =>
+      handle.local.syncSet({
+        currentFrame: -1,
+        activeTool: "select",
+        selection: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+      })
+    ).toThrow()
+  })
+
+  it("rejects zero zoom", () => {
+    const doc = new Y.Doc()
+    const handle = YAwareness.make(AwarenessSchema, doc)
+    expect(() =>
+      handle.local.syncSet({
+        currentFrame: 0,
+        activeTool: "select",
+        selection: [],
+        viewport: { x: 0, y: 0, zoom: 0 },
+      })
+    ).toThrow()
+  })
 })

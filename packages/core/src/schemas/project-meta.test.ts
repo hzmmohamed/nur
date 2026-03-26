@@ -1,24 +1,41 @@
 import { describe, it, expect } from "vitest"
 import * as S from "effect/Schema"
 import { YDocument } from "effect-yjs"
-import { ProjectMetaSchema } from "./project-meta"
+import { ProjectMetaSchema, type ProjectMeta } from "./project-meta"
 import { ProjectIndexSchema } from "../project-index"
+
+const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000"
+
+const makeProjectMeta = (overrides: Partial<Record<string, unknown>> = {}): ProjectMeta =>
+  S.decodeUnknownSync(ProjectMetaSchema)({
+    id: VALID_UUID,
+    name: "Test Project",
+    createdAt: 1711468800000,
+    updatedAt: 1711468800000,
+    ...overrides,
+  })
 
 describe("ProjectMetaSchema", () => {
   it("decodes a valid project meta object", () => {
-    const data = {
-      id: "abc-123",
-      name: "My Animation",
-      createdAt: 1711468800000,
-      updatedAt: 1711468800000,
-    }
-    const result = S.decodeUnknownSync(ProjectMetaSchema)(data)
-    expect(result.id).toBe("abc-123")
+    const result = makeProjectMeta({ name: "My Animation" })
+    expect(result.id).toBe(VALID_UUID)
     expect(result.name).toBe("My Animation")
   })
 
   it("rejects missing required fields", () => {
     expect(() => S.decodeUnknownSync(ProjectMetaSchema)({})).toThrow()
+  })
+
+  it("rejects non-UUID id", () => {
+    expect(() => makeProjectMeta({ id: "not-a-uuid" })).toThrow()
+  })
+
+  it("rejects empty name", () => {
+    expect(() => makeProjectMeta({ name: "" })).toThrow()
+  })
+
+  it("rejects untrimmed name", () => {
+    expect(() => makeProjectMeta({ name: "  My Project  " })).toThrow()
   })
 })
 
@@ -32,27 +49,19 @@ describe("ProjectIndex Y.Doc", () => {
   it("can add and read a project", () => {
     const { root } = YDocument.make(ProjectIndexSchema)
     const projectsLens = root.focus("projects")
-    projectsLens.focus("abc-123").syncSet({
-      id: "abc-123",
-      name: "Test Project",
-      createdAt: 1711468800000,
-      updatedAt: 1711468800000,
-    })
+    const meta = makeProjectMeta()
+    projectsLens.focus(VALID_UUID).syncSet(meta)
     const projects = projectsLens.syncGet()!
-    expect(projects["abc-123"].name).toBe("Test Project")
+    expect(projects[VALID_UUID].name).toBe("Test Project")
   })
 
   it("can delete a project", () => {
     const { root } = YDocument.make(ProjectIndexSchema)
     const projectsLens = root.focus("projects")
-    projectsLens.focus("abc-123").syncSet({
-      id: "abc-123",
-      name: "Test Project",
-      createdAt: 1711468800000,
-      updatedAt: 1711468800000,
-    })
+    const meta = makeProjectMeta()
+    projectsLens.focus(VALID_UUID).syncSet(meta)
     const current = projectsLens.syncGet() ?? {}
-    const { "abc-123": _, ...rest } = current
+    const { [VALID_UUID]: _, ...rest } = current
     projectsLens.syncSet(rest)
     expect(projectsLens.syncGet()).toEqual({})
   })

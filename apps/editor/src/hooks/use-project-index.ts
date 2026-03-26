@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react"
-import { createProjectIndex, createProjectDoc, type ProjectMeta } from "@nur/core"
+import { useEffect, useMemo, useState } from "react"
+import { useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { createProjectIndex, createProjectDoc, ProjectId, type ProjectMeta } from "@nur/core"
+import * as S from "effect/Schema"
 
 let _instance: ReturnType<typeof createProjectIndex> | null = null
 
@@ -10,44 +12,35 @@ function getProjectIndex() {
   return _instance
 }
 
+const makeProjectId = S.decodeSync(ProjectId)
+
 export function useProjectIndex() {
-  const { root, doc } = getProjectIndex()
-  const [projects, setProjects] = useState<Record<string, ProjectMeta>>({})
+  const { root } = getProjectIndex()
+  const projectsAtom = useMemo(() => root.focus("projects").atom(), [])
+  const projects = useAtomValue(projectsAtom) as Record<string, ProjectMeta> | undefined
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const update = () => {
-      const data = root.focus("projects").syncGet() ?? {}
-      setProjects(data)
-    }
-
-    doc.on("update", update)
-
     const pi = getProjectIndex()
     pi.persistence.once("synced", () => {
-      update()
       setReady(true)
     })
-
-    update()
-
-    return () => {
-      doc.off("update", update)
+    if (pi.persistence.synced) {
+      setReady(true)
     }
   }, [])
 
   const createProject = (name: string): string => {
-    const id = crypto.randomUUID()
+    const id = makeProjectId(crypto.randomUUID())
     const now = Date.now()
     root.focus("projects").focus(id).syncSet({
       id,
-      name,
+      name: name.trim(),
       createdAt: now,
       updatedAt: now,
     })
-    // Initialize the project Y.Doc with the name
     const { root: projectRoot } = createProjectDoc(id)
-    projectRoot.focus("name").syncSet(name)
+    projectRoot.focus("name").syncSet(name.trim())
     return id
   }
 
@@ -57,5 +50,5 @@ export function useProjectIndex() {
     root.focus("projects").syncSet(rest)
   }
 
-  return { projects, ready, createProject, deleteProject }
+  return { projects: projects ?? {}, ready, createProject, deleteProject }
 }
