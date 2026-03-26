@@ -7,3 +7,6 @@
 [submodule ".agents/effect-machine"]
 	path = .agents/effect-machine
 	url = https://github.com/cevr/effect-machine
+[submodule ".agents/lalph"]
+	path = .agents/lalph
+	url = https://github.com/tim-smart/lalph
