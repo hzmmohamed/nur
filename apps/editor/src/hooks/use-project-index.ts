@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { createProjectIndex, type ProjectMeta } from "@nur/core"
+import { createProjectIndex, createProjectDoc, type ProjectMeta } from "@nur/core"
 
 let _instance: ReturnType<typeof createProjectIndex> | null = null
 
@@ -45,6 +45,9 @@ export function useProjectIndex() {
       createdAt: now,
       updatedAt: now,
     })
+    // Initialize the project Y.Doc with the name
+    const { root: projectRoot } = createProjectDoc(id)
+    projectRoot.focus("name").syncSet(name)
     return id
   }
 
