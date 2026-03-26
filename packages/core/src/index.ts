@@ -5,3 +5,5 @@ export { ProjectIndexSchema, type ProjectIndex, createProjectIndex } from "./pro
 export { FrameSchema, ContentHash, type Frame, type ContentHash as ContentHashType } from "./schemas/frame"
 export { ProjectDocSchema, type ProjectDoc, createProjectDoc } from "./project-doc"
 export { AwarenessSchema, ViewportSchema, type AwarenessState, type Viewport } from "./schemas/awareness"
+export { createCurrentFrameIndex } from "./frame-atoms"
+export { importFrames, sortFramesByName, type PreparedFrame } from "./frame-import"
