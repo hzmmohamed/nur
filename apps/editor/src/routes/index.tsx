@@ -1,15 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
-import { css } from "../../styled-system/css"
-import { Flex, Center, VStack } from "../../styled-system/jsx"
 import { useProjectIndex } from "../hooks/use-project-index"
-import { Heading } from "@/components/ui/heading"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Text } from "@/components/ui/text"
-import { Spinner } from "@/components/ui/spinner"
-import * as Card from "@/components/ui/card"
-import { Field } from "@ark-ui/react/field"
+import { Card, CardContent } from "@/components/ui/card"
 
 export const Route = createFileRoute("/")({
   component: ProjectListPage,
@@ -38,50 +32,47 @@ function ProjectListPage() {
 
   if (!ready) {
     return (
-      <Center minH="screen">
-        <Spinner />
-      </Center>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+      </div>
     )
   }
 
   return (
-    <div className={css({ maxW: "2xl", mx: "auto", p: "8" })}>
-      <Heading as="h1" size="3xl" mb="6">
-        NUR
-      </Heading>
+    <div className="max-w-2xl mx-auto p-8">
+      <h1 className="text-3xl font-bold mb-6">NUR</h1>
 
-      <Flex gap="2" mb="6">
-        <Field.Root style={{ flex: 1 }}>
+      <div className="flex gap-2 mb-6">
+        <div className="flex-1">
           <Input
             placeholder="New project name..."
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={handleKeyDown}
           />
-        </Field.Root>
+        </div>
         <Button onClick={handleCreate}>Create</Button>
-      </Flex>
+      </div>
 
       {projectList.length === 0 ? (
-        <Text color="fg.muted">
+        <p className="text-muted-foreground">
           No projects yet. Create one to get started.
-        </Text>
+        </p>
       ) : (
-        <VStack gap="2" alignItems="stretch">
+        <div className="flex flex-col gap-2">
           {projectList.map((project) => (
-            <Card.Root
+            <Card
               key={project.id}
-              cursor="pointer"
-              _hover={{ bg: "bg.muted" }}
+              className="cursor-pointer hover:bg-accent/50 transition-colors"
               onClick={() => navigate({ to: "/project/$id", params: { id: project.id } })}
             >
-              <Card.Body p="3">
-                <Flex justifyContent="space-between" alignItems="center">
+              <CardContent className="p-3">
+                <div className="flex justify-between items-center">
                   <div>
-                    <Text fontWeight="medium">{project.name}</Text>
-                    <Text size="sm" color="fg.muted">
+                    <p className="font-medium">{project.name}</p>
+                    <p className="text-sm text-muted-foreground">
                       {new Date(project.updatedAt).toLocaleDateString()}
-                    </Text>
+                    </p>
                   </div>
                   <Button
                     variant="ghost"
@@ -93,11 +84,11 @@ function ProjectListPage() {
                   >
                     Delete
                   </Button>
-                </Flex>
-              </Card.Body>
-            </Card.Root>
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </VStack>
+        </div>
       )}
     </div>
   )

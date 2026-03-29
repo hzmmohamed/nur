@@ -1,8 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useRef, useState, useEffect, useCallback, useMemo } from "react"
 import { useAtomValue } from "@effect-atom/atom-react/Hooks"
-import { css } from "../../styled-system/css"
-import { Center, Flex } from "../../styled-system/jsx"
 import { useProjectDoc } from "../hooks/use-project-doc"
 import { useCurrentFrame } from "../hooks/use-current-frame"
 import { FrameDropZone } from "../components/frame-drop-zone"
@@ -15,9 +13,6 @@ import {
   registerHotkeyContext,
   unregisterHotkeyContext,
 } from "../actors/hotkey-manager"
-import { Heading } from "@/components/ui/heading"
-import { Text } from "@/components/ui/text"
-import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/project/$id")({
@@ -149,35 +144,32 @@ function ProjectEditorPage() {
 
   if (!ready) {
     return (
-      <Center minH="screen">
-        <Spinner />
-      </Center>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+      </div>
     )
   }
 
   const name = root.focus("name").syncGet() || "Untitled"
 
   return (
-    <div className={css({ h: "screen", display: "flex", flexDirection: "column" })}>
-      <header className={css({
-        display: "flex", alignItems: "center", gap: "4",
-        px: "4", py: "2", borderBottom: "1px solid", borderColor: "border.default",
-      })}>
+    <div className="h-screen flex flex-col">
+      <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
         <Button variant="link" asChild>
           <Link to="/">Back</Link>
         </Button>
-        <Heading as="h1" size="lg">{name}</Heading>
-        <Text size="sm" color="fg.muted">
+        <h1 className="text-lg font-semibold">{name}</h1>
+        <p className="text-sm text-muted-foreground">
           {frameCount} frames
-        </Text>
+        </p>
         {frameCount > 0 && (
-          <Text size="sm" color="fg.muted">
+          <p className="text-sm text-muted-foreground">
             Frame {currentFrame + 1} / {frameCount}
-          </Text>
+          </p>
         )}
       </header>
 
-      <main ref={mainRef} className={css({ flex: "1", position: "relative", overflow: "hidden" })}>
+      <main ref={mainRef} className="flex-1 relative overflow-hidden">
         {frameCount === 0 ? (
           <FrameDropZone onFilesSelected={handleFilesSelected} />
         ) : (

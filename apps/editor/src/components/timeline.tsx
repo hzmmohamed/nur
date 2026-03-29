@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react"
 import { Stage, Layer, Rect, Text, Line } from "react-konva"
-import { css } from "../../styled-system/css"
 
 interface TimelineProps {
   frameCount: number
@@ -129,11 +128,8 @@ export function Timeline(props: TimelineProps) {
 
   if (frameCount === 0) {
     return (
-      <div className={css({
-        display: "flex", alignItems: "center", px: "4", py: "2",
-        borderTop: "1px solid", borderColor: "border.default", minH: "16", bg: "bg.default",
-      })}>
-        <p className={css({ color: "fg.muted", fontSize: "sm" })}>No frames imported</p>
+      <div className="flex items-center px-4 py-2 border-t border-border min-h-16 bg-background">
+        <p className="text-muted-foreground text-sm">No frames imported</p>
       </div>
     )
   }
@@ -141,10 +137,7 @@ export function Timeline(props: TimelineProps) {
   return (
     <div
       ref={containerRef}
-      className={css({
-        borderTop: "1px solid", borderColor: "border.default",
-        overflowX: "auto", overflowY: "hidden", cursor: "ew-resize", bg: "bg.default",
-      })}
+      className="border-t border-border overflow-x-auto overflow-y-hidden cursor-ew-resize bg-background"
       onMouseDown={handleMouseDown}
     >
       <Stage width={totalWidth} height={TIMELINE_HEIGHT}>

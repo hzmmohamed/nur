@@ -11,5 +11,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "styled-system"]
+  "include": ["src", "e2e"]
 }

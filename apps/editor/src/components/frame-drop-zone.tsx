@@ -1,9 +1,6 @@
 import { useState, useCallback } from "react"
-import { css } from "../../styled-system/css"
 import { useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { importProgressAtom } from "../actors/import-manager"
-import { Text } from "@/components/ui/text"
-import { Spinner } from "@/components/ui/spinner"
 
 export function FrameDropZone(props: {
   onFilesSelected: (files: FileList) => void
@@ -45,21 +42,9 @@ export function FrameDropZone(props: {
 
   return (
     <div
-      className={css({
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        flex: "1",
-        border: "2px dashed",
-        borderColor: dragOver ? "border.outline" : "border.default",
-        borderRadius: "lg",
-        m: "4",
-        cursor: isImporting ? "default" : "pointer",
-        transition: "border-color 0.15s",
-        bg: dragOver ? "bg.muted" : "transparent",
-        gap: "2",
-      })}
+      className={`flex flex-col items-center justify-center flex-1 border-2 border-dashed rounded-lg m-4 gap-2 transition-colors ${
+        dragOver ? "border-ring bg-muted/50" : "border-border bg-transparent"
+      } ${isImporting ? "cursor-default" : "cursor-pointer"}`}
       onDrop={isImporting ? undefined : handleDrop}
       onDragOver={isImporting ? undefined : handleDragOver}
       onDragLeave={handleDragLeave}
@@ -67,15 +52,15 @@ export function FrameDropZone(props: {
     >
       {isImporting ? (
         <>
-          <Spinner />
-          <Text color="fg.muted">
+          <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+          <p className="text-muted-foreground">
             Importing frames... {progress.completed}/{progress.total}
-          </Text>
+          </p>
         </>
       ) : (
-        <Text color="fg.muted" textAlign="center">
+        <p className="text-muted-foreground text-center">
           Drop image files here or click to browse
-        </Text>
+        </p>
       )}
     </div>
   )
