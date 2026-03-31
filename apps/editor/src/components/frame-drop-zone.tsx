@@ -1,11 +1,14 @@
-import { useState, useCallback } from "react"
-import { useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { useCallback } from "react"
+import { Atom } from "@effect-atom/atom"
+import { useAtom, useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { importProgressAtom } from "../actors/import-manager"
+
+const dragOverAtom = Atom.make(false)
 
 export function FrameDropZone(props: {
   onFilesSelected: (files: FileList) => void
 }) {
-  const [dragOver, setDragOver] = useState(false)
+  const [dragOver, setDragOver] = useAtom(dragOverAtom)
   const progress = useAtomValue(importProgressAtom)
 
   const handleDrop = useCallback((e: React.DragEvent) => {
