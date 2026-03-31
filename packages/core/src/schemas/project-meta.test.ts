@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import * as S from "effect/Schema"
-import { YDocument } from "effect-yjs"
 import { ProjectMetaSchema, type ProjectMeta } from "./project-meta"
 import { ProjectIndexSchema } from "../project-index"
 
@@ -39,30 +38,15 @@ describe("ProjectMetaSchema", () => {
   })
 })
 
-describe("ProjectIndex Y.Doc", () => {
-  it("creates a Y.Doc with projects record", () => {
-    const { root } = YDocument.make(ProjectIndexSchema)
-    const projects = root.focus("projects").syncGet()
-    expect(projects).toEqual({})
+describe("ProjectIndexSchema", () => {
+  it("decodes a valid project index", () => {
+    const meta = makeProjectMeta()
+    const result = S.decodeUnknownSync(ProjectIndexSchema)({ [VALID_UUID]: meta })
+    expect(result[VALID_UUID].name).toBe("Test Project")
   })
 
-  it("can add and read a project", () => {
-    const { root } = YDocument.make(ProjectIndexSchema)
-    const projectsLens = root.focus("projects")
-    const meta = makeProjectMeta()
-    projectsLens.focus(VALID_UUID).syncSet(meta)
-    const projects = projectsLens.syncGet()!
-    expect(projects[VALID_UUID].name).toBe("Test Project")
-  })
-
-  it("can delete a project", () => {
-    const { root } = YDocument.make(ProjectIndexSchema)
-    const projectsLens = root.focus("projects")
-    const meta = makeProjectMeta()
-    projectsLens.focus(VALID_UUID).syncSet(meta)
-    const current = projectsLens.syncGet() ?? {}
-    const { [VALID_UUID]: _, ...rest } = current
-    projectsLens.syncSet(rest)
-    expect(projectsLens.syncGet()).toEqual({})
+  it("decodes an empty record", () => {
+    const result = S.decodeUnknownSync(ProjectIndexSchema)({})
+    expect(result).toEqual({})
   })
 })

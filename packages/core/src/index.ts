@@ -1,7 +1,7 @@
 export { ProjectId, FrameId } from "./schemas/ids"
 export type { ProjectId as ProjectIdType, FrameId as FrameIdType } from "./schemas/ids"
 export { ProjectMetaSchema, type ProjectMeta } from "./schemas/project-meta"
-export { ProjectIndexSchema, type ProjectIndex, createProjectIndex } from "./project-index"
+export { ProjectIndexSchema, type ProjectIndex } from "./project-index"
 export { FrameSchema, ContentHash, type Frame, type ContentHash as ContentHashType } from "./schemas/frame"
 export { ProjectDocSchema, type ProjectDoc, createProjectDoc } from "./project-doc"
 export { AwarenessSchema, ViewportSchema, type AwarenessState, type Viewport } from "./schemas/awareness"
