@@ -2,6 +2,9 @@ import tseslint from "typescript-eslint"
 
 export default tseslint.config(
   {
+    ignores: ["src/components/ui/**", "src/routeTree.gen.ts"],
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     extends: [tseslint.configs.base],
     rules: {
