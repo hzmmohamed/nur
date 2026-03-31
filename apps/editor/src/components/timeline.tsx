@@ -1,4 +1,6 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from "react"
+import { useRef, useCallback, useMemo } from "react"
+import { Atom } from "@effect-atom/atom"
+import { useAtom, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { Stage, Layer, Rect, Text, Line } from "react-konva"
 
 interface TimelineProps {
@@ -12,10 +14,13 @@ const FRAME_CELL_BASE_WIDTH = 24
 const TIMELINE_HEIGHT = 64
 const HEADER_HEIGHT = 20
 
+const zoomLevelAtom = Atom.make(1)
+const isScrubbingAtom = Atom.make(false)
+
 export function Timeline(props: TimelineProps) {
   const { frameCount, currentFrame, onFrameSelect, width } = props
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const [isScrubbing, setIsScrubbing] = useState(false)
+  const [zoomLevel, setZoomLevel] = useAtom(zoomLevelAtom)
+  const [isScrubbing, setIsScrubbing] = useAtom(isScrubbingAtom)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const cellWidth = FRAME_CELL_BASE_WIDTH * zoomLevel
@@ -40,45 +45,53 @@ export function Timeline(props: TimelineProps) {
       setIsScrubbing(true)
       onFrameSelect(positionToFrame(e.clientX))
     },
-    [frameCount, onFrameSelect, positionToFrame]
+    [frameCount, onFrameSelect, positionToFrame, setIsScrubbing]
   )
 
   // Global mouse events for scrubbing
-  useEffect(() => {
-    if (!isScrubbing) return
+  const scrubbingListenerAtom = useMemo(() =>
+    Atom.make((get) => {
+      const scrubbing = get(isScrubbingAtom)
+      if (!scrubbing) return
 
-    const handleMouseMove = (e: MouseEvent) => {
-      onFrameSelect(positionToFrame(e.clientX))
-    }
-    const handleMouseUp = () => setIsScrubbing(false)
+      const handleMouseMove = (e: MouseEvent) => {
+        onFrameSelect(positionToFrame(e.clientX))
+      }
+      const handleMouseUp = () => get.set(isScrubbingAtom, false)
 
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [isScrubbing, onFrameSelect, positionToFrame])
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+      get.addFinalizer(() => {
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
+      })
+    }),
+    [onFrameSelect, positionToFrame],
+  )
+  useAtomMount(scrubbingListenerAtom)
 
   // Ctrl + scroll wheel zoom
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
+  const wheelZoomAtom = useMemo(() =>
+    Atom.make((get) => {
+      const container = containerRef.current
+      if (!container) return
 
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault()
-        setZoomLevel((prev) => {
+      const handleWheel = (e: WheelEvent) => {
+        if (e.ctrlKey) {
+          e.preventDefault()
+          const prev = get.once(zoomLevelAtom)
           const next = e.deltaY < 0
             ? Math.min(5, prev + 0.1)
             : Math.max(0.5, prev - 0.1)
-          return parseFloat(next.toFixed(1))
-        })
+          get.set(zoomLevelAtom, parseFloat(next.toFixed(1)))
+        }
       }
-    }
-    container.addEventListener("wheel", handleWheel, { passive: false })
-    return () => container.removeEventListener("wheel", handleWheel)
-  }, [])
+      container.addEventListener("wheel", handleWheel, { passive: false })
+      get.addFinalizer(() => container.removeEventListener("wheel", handleWheel))
+    }),
+    [],
+  )
+  useAtomMount(wheelZoomAtom)
 
   // Render frame cells
   const frameCells = useMemo(() => {
