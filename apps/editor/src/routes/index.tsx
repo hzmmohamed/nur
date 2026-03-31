@@ -1,9 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { Atom } from "@effect-atom/atom"
+import { useAtom } from "@effect-atom/atom-react/Hooks"
 import { useProjectIndex } from "../hooks/use-project-index"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+
+const newNameAtom = Atom.make("")
 
 export const Route = createFileRoute("/")({
   component: ProjectListPage,
@@ -12,7 +15,7 @@ export const Route = createFileRoute("/")({
 function ProjectListPage() {
   const { projects, createProject, deleteProject } = useProjectIndex()
   const navigate = useNavigate()
-  const [newName, setNewName] = useState("")
+  const [newName, setNewName] = useAtom(newNameAtom)
 
   const handleCreate = () => {
     const trimmed = newName.trim()
