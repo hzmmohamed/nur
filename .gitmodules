@@ -16,3 +16,6 @@
 [submodule ".agents/effect"]
 	path = .agents/effect
 	url = git@github.com:Effect-TS/effect.git
+[submodule ".agents/loglayer"]
+	path = .agents/loglayer
+	url = git@github.com:loglayer/loglayer.git
