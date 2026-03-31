@@ -45,3 +45,6 @@ apps/*/pnpm-lock.yaml
 # Playwright
 playwright-report/
 test-results/
+
+
+llms*.txt
