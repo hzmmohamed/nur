@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useRef, useState, useEffect, useCallback, useMemo } from "react"
-import { useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { useRef, useCallback, useMemo } from "react"
+import { Atom } from "@effect-atom/atom"
+import { useAtomValue, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { useProjectDoc } from "../hooks/use-project-doc"
 import { useCurrentFrame } from "../hooks/use-current-frame"
 import { FrameDropZone } from "../components/frame-drop-zone"
@@ -14,6 +15,9 @@ import {
   unregisterHotkeyContext,
 } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
+
+const canvasSizeAtom = Atom.make({ width: 0, height: 0 })
+const timelineWidthAtom = Atom.make(0)
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -49,8 +53,8 @@ function ProjectEditorPage() {
   const { root, doc, ready } = useProjectDoc(id)
   const { currentFrame, setCurrentFrame } = useCurrentFrame(doc)
   const mainRef = useRef<HTMLDivElement>(null)
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
-  const [timelineWidth, setTimelineWidth] = useState(0)
+  const canvasSize = useAtomValue(canvasSizeAtom)
+  const timelineWidth = useAtomValue(timelineWidthAtom)
   const timelineRef = useRef<HTMLDivElement>(null)
 
   // Reactive frames from Y.Doc
@@ -65,53 +69,65 @@ function ProjectEditorPage() {
   const currentFrameData = frames.find((f) => f.index === currentFrame)
 
   // Canvas resize observer
-  useEffect(() => {
-    const el = mainRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (entry) {
-        setCanvasSize({
-          width: Math.floor(entry.contentRect.width),
-          height: Math.floor(entry.contentRect.height),
-        })
-      }
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+  const canvasResizeAtom = useMemo(() =>
+    Atom.make((get) => {
+      const el = mainRef.current
+      if (!el) return
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries[0]
+        if (entry) {
+          get.set(canvasSizeAtom, {
+            width: Math.floor(entry.contentRect.width),
+            height: Math.floor(entry.contentRect.height),
+          })
+        }
+      })
+      observer.observe(el)
+      get.addFinalizer(() => observer.disconnect())
+    }),
+    [],
+  )
+  useAtomMount(canvasResizeAtom)
 
   // Timeline width observer
-  useEffect(() => {
-    const el = timelineRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (entry) {
-        setTimelineWidth(Math.floor(entry.contentRect.width))
-      }
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+  const timelineResizeAtom = useMemo(() =>
+    Atom.make((get) => {
+      const el = timelineRef.current
+      if (!el) return
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries[0]
+        if (entry) {
+          get.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
+        }
+      })
+      observer.observe(el)
+      get.addFinalizer(() => observer.disconnect())
+    }),
+    [],
+  )
+  useAtomMount(timelineResizeAtom)
 
   // Register hotkey context for arrow key navigation
-  useEffect(() => {
-    registerHotkeyContext({
-      id: "editor",
-      bindings: [
-        {
-          key: "ArrowRight",
-          handler: () => setCurrentFrame(Math.min(currentFrame + 1, frameCount - 1)),
-        },
-        {
-          key: "ArrowLeft",
-          handler: () => setCurrentFrame(Math.max(currentFrame - 1, 0)),
-        },
-      ],
-    })
-    return () => unregisterHotkeyContext("editor")
-  }, [currentFrame, frameCount, setCurrentFrame])
+  const hotkeyAtom = useMemo(() =>
+    Atom.make((get) => {
+      registerHotkeyContext({
+        id: "editor",
+        bindings: [
+          {
+            key: "ArrowRight",
+            handler: () => setCurrentFrame(Math.min(currentFrame + 1, frameCount - 1)),
+          },
+          {
+            key: "ArrowLeft",
+            handler: () => setCurrentFrame(Math.max(currentFrame - 1, 0)),
+          },
+        ],
+      })
+      get.addFinalizer(() => unregisterHotkeyContext("editor"))
+    }),
+    [currentFrame, frameCount, setCurrentFrame],
+  )
+  useAtomMount(hotkeyAtom)
 
   // Handle file import
   const handleFilesSelected = useCallback(async (fileList: FileList) => {
