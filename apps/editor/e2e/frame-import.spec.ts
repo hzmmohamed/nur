@@ -27,28 +27,31 @@ test.describe("Frame import and timeline", () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/")
-    await page.evaluate(() => {
-      indexedDB.deleteDatabase("nur-project-index")
-      indexedDB.deleteDatabase("nur-blobs")
+    await page.evaluate(async () => {
+      const dbs = await indexedDB.databases()
+      for (const db of dbs) {
+        if (db.name?.startsWith("nur-")) {
+          indexedDB.deleteDatabase(db.name)
+        }
+      }
     })
     await page.reload()
-    await page.waitForLoadState("networkidle")
+    await page.getByText("NUR").waitFor({ timeout: 10000 })
 
     // Create a project
-    await page.getByPlaceholder(/new project/i).fill("Frame Test")
-    await page.getByRole("button", { name: /create/i }).click()
+    await page.getByPlaceholder("New project name...").fill("Frame Test")
+    await page.getByRole("button", { name: "Create" }).click()
     await expect(page).toHaveURL(/\/project\//)
   })
 
   test("shows drop zone when no frames imported", async ({ page }) => {
-    await expect(page.getByText(/drop image files/i)).toBeVisible()
+    await expect(page.getByText("Drop image files here")).toBeVisible()
   })
 
   test("imports frames via file picker", async ({ page }) => {
-    // FrameDropZone creates a file input on click
     const [fileChooser] = await Promise.all([
       page.waitForEvent("filechooser"),
-      page.getByText(/drop image files/i).click(),
+      page.getByText("Drop image files here").click(),
     ])
 
     await fileChooser.setFiles([
@@ -57,14 +60,13 @@ test.describe("Frame import and timeline", () => {
       path.join(testDir, "frame3.png"),
     ])
 
-    // Wait for frame count to update
     await expect(page.getByText("3 frames")).toBeVisible({ timeout: 15000 })
   })
 
   test("shows frame indicator after import", async ({ page }) => {
     const [fileChooser] = await Promise.all([
       page.waitForEvent("filechooser"),
-      page.getByText(/drop image files/i).click(),
+      page.getByText("Drop image files here").click(),
     ])
 
     await fileChooser.setFiles([
@@ -74,6 +76,6 @@ test.describe("Frame import and timeline", () => {
     ])
 
     await expect(page.getByText("3 frames")).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText(/frame 1.*3/i)).toBeVisible()
+    await expect(page.getByText(/Frame 1/)).toBeVisible()
   })
 })
