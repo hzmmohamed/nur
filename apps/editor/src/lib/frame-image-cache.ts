@@ -1,8 +1,7 @@
 import * as Effect from "effect/Effect"
+import { Atom } from "@effect-atom/atom"
 import { BlobStore } from "@nur/object-store"
 import { AppBlobStore } from "./blob-store-layer"
-
-const imageCache = new Map<string, HTMLImageElement>()
 
 const decodeImage = (data: Uint8Array): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -20,23 +19,15 @@ const decodeImage = (data: Uint8Array): Promise<HTMLImageElement> =>
     img.src = url
   })
 
-export const getCachedFrameImage = (contentHash: string): HTMLImageElement | undefined =>
-  imageCache.get(contentHash)
+const storageRuntime = Atom.runtime(AppBlobStore)
 
-export const loadAndCacheFrameImage = (contentHash: string): Promise<HTMLImageElement> => {
-  const cached = imageCache.get(contentHash)
-  if (cached) return Promise.resolve(cached)
-
-  const program = Effect.gen(function* () {
-    const store = yield* BlobStore
-    return yield* store.get(contentHash)
-  }).pipe(Effect.provide(AppBlobStore))
-
-  return Effect.runPromise(program).then((data) => {
-    if (!data) throw new Error(`Blob not found: ${contentHash}`)
-    return decodeImage(data).then((img) => {
-      imageCache.set(contentHash, img)
-      return img
-    })
-  })
-}
+export const frameImageAtom = Atom.family((contentHash: string) =>
+  storageRuntime.atom(
+    Effect.gen(function* () {
+      const store = yield* BlobStore
+      const data = yield* store.get(contentHash)
+      if (!data) return yield* Effect.fail(new Error(`Blob not found: ${contentHash}`))
+      return yield* Effect.promise(() => decodeImage(data))
+    }),
+  ).pipe(Atom.setIdleTTL("5 minutes")),
+)

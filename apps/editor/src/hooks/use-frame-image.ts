@@ -1,30 +1,15 @@
-import { useEffect, useState } from "react"
-import { getCachedFrameImage, loadAndCacheFrameImage } from "../lib/frame-image-cache"
+import { useMemo } from "react"
+import { Atom, Result } from "@effect-atom/atom"
+import { useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { frameImageAtom } from "../lib/frame-image-cache"
+
+const emptyAtom = Atom.make(Result.initial<HTMLImageElement, Error>()).pipe(Atom.keepAlive)
 
 export function useFrameImage(contentHash: string | undefined): HTMLImageElement | undefined {
-  const [image, setImage] = useState<HTMLImageElement | undefined>(
-    contentHash ? getCachedFrameImage(contentHash) : undefined
+  const atom = useMemo(
+    () => contentHash ? frameImageAtom(contentHash) : emptyAtom,
+    [contentHash],
   )
-
-  useEffect(() => {
-    if (!contentHash) {
-      setImage(undefined)
-      return
-    }
-
-    const cached = getCachedFrameImage(contentHash)
-    if (cached) {
-      setImage(cached)
-      return
-    }
-
-    let cancelled = false
-    loadAndCacheFrameImage(contentHash)
-      .then((img) => { if (!cancelled) setImage(img) })
-      .catch(() => {})
-
-    return () => { cancelled = true }
-  }, [contentHash])
-
-  return image
+  const result = useAtomValue(atom)
+  return Result.isSuccess(result) ? result.value : undefined
 }
