@@ -1,0 +1,5 @@
+- [NUR sequential objectives plan](project_sequential_objectives.md) — 17-objective zero-to-complete build plan, prototype is throwaway
+- [User role and context](user_role.md) — Hfahmi builds NUR animation lighting tool, prefers pragmatic architecture
+- [Schema and state conventions](feedback_schema_conventions.md) — Branded IDs, trimmed strings, length constraints, effect-atom over useState
+- [Actor-driven architecture](feedback_actor_architecture.md) — Every behavior owned by actors (effect-atom/effect-machine), components are pure renderers
+- [Use @effect/platform-browser](feedback_platform_browser.md) — BrowserWorker for workers, BrowserStream for event listeners, not raw DOM APIs
