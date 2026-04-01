@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
 import { useRef, useCallback, useMemo } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
@@ -48,6 +48,17 @@ function ProjectEditorPage() {
   const importResult = useAtomValue(importFn)
   const importProgress = useAtomValue(importProgressAtom(id))
   const isImporting = Result.isWaiting(importResult)
+
+  // Block navigation while importing — confirm dialog + abort on proceed
+  useBlocker({
+    shouldBlockFn: () => {
+      if (!isImporting) return false
+      const leave = window.confirm("Import in progress. Abort and leave?")
+      if (leave) triggerImport(Atom.Interrupt)
+      return !leave
+    },
+    enableBeforeUnload: () => isImporting,
+  })
 
   const handleFilesSelected = useCallback((files: FileList) => {
     triggerImport({ files, root, startIndex: frameCount })
