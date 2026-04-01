@@ -14,6 +14,7 @@ export default defineConfig({
     react(),
   ],
   resolve: {
+    dedupe: ['yjs'],
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },

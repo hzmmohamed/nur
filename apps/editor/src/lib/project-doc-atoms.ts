@@ -18,6 +18,10 @@ interface ProjectDocEntry {
 
 const docCache = new Map<string, ProjectDocEntry>()
 
+// No beforeunload flush — individual storeUpdate calls already persist data.
+// flush() does clear+write which is unsafe in beforeunload (clear may commit
+// but write may not, leaving an empty database).
+
 function getOrCreateProjectDoc(projectId: string): ProjectDocEntry {
   let entry = docCache.get(projectId)
   if (!entry) {
@@ -41,6 +45,16 @@ function getOrCreateProjectDoc(projectId: string): ProjectDocEntry {
 /** Public accessor for non-React code (import-atoms needs the root) */
 export function getProjectDocRoot(projectId: string) {
   return getOrCreateProjectDoc(projectId).root
+}
+
+/** Wait for persistence sync before writing */
+export function waitForPersistence(projectId: string): Promise<void> {
+  return getOrCreateProjectDoc(projectId).syncPromise
+}
+
+/** Force flush Y.Doc state to IndexedDB */
+export function flushProjectDoc(projectId: string): Promise<void> {
+  return getOrCreateProjectDoc(projectId).persistence.flush()
 }
 
 // -- Atoms --
