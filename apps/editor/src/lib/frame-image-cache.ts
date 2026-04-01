@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect"
-import { Atom } from "@effect-atom/atom"
+import { Atom, Result } from "@effect-atom/atom"
 import { BlobStore } from "@nur/object-store"
 import { AppBlobStore } from "./blob-store-layer"
 
@@ -31,3 +31,5 @@ export const frameImageAtom = Atom.family((contentHash: string) =>
     }),
   ).pipe(Atom.setIdleTTL("5 minutes")),
 )
+
+export const emptyImageAtom = Atom.make(Result.initial<HTMLImageElement, Error>()).pipe(Atom.keepAlive)
