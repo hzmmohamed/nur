@@ -1,15 +1,16 @@
 import { useCallback } from "react"
 import { Atom } from "@effect-atom/atom"
-import { useAtom, useAtomValue } from "@effect-atom/atom-react/Hooks"
-import { importProgressAtom } from "../actors/import-manager"
+import { useAtom } from "@effect-atom/atom-react/Hooks"
+import type { ImportProgress } from "../lib/import-atoms"
 
 const dragOverAtom = Atom.make(false)
 
 export function FrameDropZone(props: {
   onFilesSelected: (files: FileList) => void
+  progress: ImportProgress
+  isImporting: boolean
 }) {
   const [dragOver, setDragOver] = useAtom(dragOverAtom)
-  const progress = useAtomValue(importProgressAtom)
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -41,24 +42,25 @@ export function FrameDropZone(props: {
     input.click()
   }, [props.onFilesSelected])
 
-  const isImporting = progress.state === "preparing" || progress.state === "importing"
-
   return (
     <div
       className={`flex flex-col items-center justify-center flex-1 border-2 border-dashed rounded-lg m-4 gap-2 transition-colors ${
         dragOver ? "border-ring bg-muted/50" : "border-border bg-transparent"
-      } ${isImporting ? "cursor-default" : "cursor-pointer"}`}
-      onDrop={isImporting ? undefined : handleDrop}
-      onDragOver={isImporting ? undefined : handleDragOver}
+      } ${props.isImporting ? "cursor-default" : "cursor-pointer"}`}
+      onDrop={props.isImporting ? undefined : handleDrop}
+      onDragOver={props.isImporting ? undefined : handleDragOver}
       onDragLeave={handleDragLeave}
-      onClick={isImporting ? undefined : handleClick}
+      onClick={props.isImporting ? undefined : handleClick}
     >
-      {isImporting ? (
+      {props.isImporting ? (
         <>
           <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
           <p className="text-muted-foreground">
-            Importing frames... {progress.completed}/{progress.total}
+            Importing frames... {props.progress.completed}/{props.progress.total}
           </p>
+          {props.progress.currentFile && (
+            <p className="text-xs text-muted-foreground">{props.progress.currentFile}</p>
+          )}
         </>
       ) : (
         <p className="text-muted-foreground text-center">

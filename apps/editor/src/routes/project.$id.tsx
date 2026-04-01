@@ -1,15 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useRef, useCallback, useMemo } from "react"
-import { Atom } from "@effect-atom/atom"
-import { useAtomValue, useAtomMount } from "@effect-atom/atom-react/Hooks"
+import { Atom, Result } from "@effect-atom/atom"
+import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { useProjectDoc } from "../hooks/use-project-doc"
 import { useCurrentFrame } from "../hooks/use-current-frame"
 import { FrameDropZone } from "../components/frame-drop-zone"
 import { FrameCanvas } from "../components/frame-canvas"
 import { Timeline } from "../components/timeline"
-import { sortFramesByName, importFrames, type PreparedFrame, type Frame } from "@nur/core"
-import { AppBlobStore } from "../lib/blob-store-layer"
-import * as Effect from "effect/Effect"
+import type { Frame } from "@nur/core"
+import { importFnAtom, importProgressAtom } from "../lib/import-atoms"
 import {
   registerHotkeyContext,
   unregisterHotkeyContext,
@@ -22,31 +21,6 @@ const timelineWidthAtom = Atom.make(0)
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
 })
-
-function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsArrayBuffer(file)
-  })
-}
-
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      resolve({ width: img.naturalWidth, height: img.naturalHeight })
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error(`Failed to load: ${file.name}`))
-    }
-    img.src = url
-  })
-}
 
 function ProjectEditorPage() {
   const { id } = Route.useParams()
@@ -67,6 +41,17 @@ function ProjectEditorPage() {
 
   const frameCount = frames.length
   const currentFrameData = frames.find((f) => f.index === currentFrame)
+
+  // Import atoms
+  const importFn = importFnAtom(id)
+  const triggerImport = useAtomSet(importFn)
+  const importResult = useAtomValue(importFn)
+  const importProgress = useAtomValue(importProgressAtom(id))
+  const isImporting = Result.isWaiting(importResult)
+
+  const handleFilesSelected = useCallback((files: FileList) => {
+    triggerImport({ files, root, startIndex: frameCount })
+  }, [triggerImport, root, frameCount])
 
   // Canvas resize observer
   const canvasResizeAtom = useMemo(() =>
@@ -129,35 +114,6 @@ function ProjectEditorPage() {
   )
   useAtomMount(hotkeyAtom)
 
-  // Handle file import
-  const handleFilesSelected = useCallback(async (fileList: FileList) => {
-    const imageFiles = Array.from(fileList).filter((f) => f.type.startsWith("image/"))
-    if (imageFiles.length === 0) return
-
-    const sorted = sortFramesByName(imageFiles)
-    const prepared: Array<PreparedFrame> = []
-    for (const file of sorted) {
-      const [buffer, dims] = await Promise.all([
-        readFileAsArrayBuffer(file),
-        getImageDimensions(file),
-      ])
-      prepared.push({
-        data: new Uint8Array(buffer),
-        name: file.name,
-        width: dims.width,
-        height: dims.height,
-      })
-    }
-
-    await Effect.runPromise(
-      importFrames({
-        files: prepared,
-        projectRoot: root,
-        startIndex: frameCount,
-      }).pipe(Effect.provide(AppBlobStore))
-    )
-  }, [root, frameCount])
-
   if (!ready) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -186,18 +142,20 @@ function ProjectEditorPage() {
       </header>
 
       <main ref={mainRef} className="flex-1 relative overflow-hidden">
-        {frameCount === 0 ? (
-          <FrameDropZone onFilesSelected={handleFilesSelected} />
+        {frameCount === 0 || isImporting ? (
+          <FrameDropZone
+            onFilesSelected={handleFilesSelected}
+            progress={importProgress}
+            isImporting={isImporting}
+          />
         ) : (
-          <>
-            <FrameCanvas
-              contentHash={currentFrameData?.contentHash}
-              width={canvasSize.width}
-              height={canvasSize.height}
-              frameWidth={currentFrameData?.width ?? 1}
-              frameHeight={currentFrameData?.height ?? 1}
-            />
-          </>
+          <FrameCanvas
+            contentHash={currentFrameData?.contentHash}
+            width={canvasSize.width}
+            height={canvasSize.height}
+            frameWidth={currentFrameData?.width ?? 1}
+            frameHeight={currentFrameData?.height ?? 1}
+          />
         )}
       </main>
 
