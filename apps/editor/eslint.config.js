@@ -17,6 +17,10 @@ export default tseslint.config(
           },
         ],
       }],
+      "no-restricted-syntax": ["error", {
+        selector: "NewExpression[callee.name='Map']",
+        message: "Use MutableHashMap from effect/MutableHashMap or Cache from effect/Cache instead of native Map.",
+      }],
     },
   },
 )

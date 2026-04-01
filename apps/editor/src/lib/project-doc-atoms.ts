@@ -1,101 +1,126 @@
-import { Atom } from "@effect-atom/atom"
+import { Atom, Result } from "@effect-atom/atom"
 import { createProjectDoc, createCurrentFrameIndex, ProjectId, type Frame } from "@nur/core"
 import { YAwareness } from "effect-yjs"
 import { AwarenessSchema } from "@nur/core"
 import * as S from "effect/Schema"
+import * as Effect from "effect/Effect"
+import * as Cache from "effect/Cache"
+import * as Duration from "effect/Duration"
+import * as Layer from "effect/Layer"
 
 const parseProjectId = S.decodeSync(ProjectId)
 
-// -- Internal cache: one Y.Doc per project --
+// -- Types --
 
 interface ProjectDocEntry {
   readonly root: ReturnType<typeof createProjectDoc>["root"]
   readonly doc: ReturnType<typeof createProjectDoc>["doc"]
   readonly persistence: ReturnType<typeof createProjectDoc>["persistence"]
   readonly awareness: ReturnType<typeof createCurrentFrameIndex>
-  readonly syncPromise: Promise<void>
 }
 
-const docCache = new Map<string, ProjectDocEntry>()
+// -- Shared runtime --
 
-// No beforeunload flush — individual storeUpdate calls already persist data.
-// flush() does clear+write which is unsafe in beforeunload (clear may commit
-// but write may not, leaving an empty database).
+export const projectDocRuntime = Atom.runtime(Layer.empty)
 
-function getOrCreateProjectDoc(projectId: string): ProjectDocEntry {
-  let entry = docCache.get(projectId)
-  if (!entry) {
-    const id = parseProjectId(projectId)
-    const { doc, root, persistence } = createProjectDoc(id)
-    const awareness = YAwareness.make(AwarenessSchema, doc)
-    awareness.local.syncSet({
-      currentFrame: 0,
-      activeTool: "select",
-      selection: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
+// -- Cache atom: effectful construction, one Y.Doc per project --
+
+const projectDocCacheAtom = projectDocRuntime.atom(
+  Effect.gen(function* () {
+    return yield* Cache.make({
+      capacity: 64,
+      timeToLive: Duration.infinity,
+      lookup: (projectId: string) =>
+        Effect.sync(() => {
+          const id = parseProjectId(projectId)
+          const { doc, root, persistence } = createProjectDoc(id)
+          const awareness = YAwareness.make(AwarenessSchema, doc)
+          awareness.local.syncSet({
+            currentFrame: 0,
+            activeTool: "select",
+            selection: [],
+            viewport: { x: 0, y: 0, zoom: 1 },
+          })
+          const frameIndex = createCurrentFrameIndex(awareness)
+          return { root, doc, persistence, awareness: frameIndex } satisfies ProjectDocEntry
+        }),
     })
-    const frameIndex = createCurrentFrameIndex(awareness)
-    const syncPromise = persistence.sync()
-    entry = { root, doc, persistence, awareness: frameIndex, syncPromise }
-    docCache.set(projectId, entry)
-  }
-  return entry
-}
+  }),
+).pipe(Atom.keepAlive)
 
-/** Public accessor for non-React code (import-atoms needs the root) */
-export function getProjectDocRoot(projectId: string) {
-  return getOrCreateProjectDoc(projectId).root
-}
+// -- Effect-returning helpers --
 
-/** Wait for persistence sync before writing */
-export function waitForPersistence(projectId: string): Promise<void> {
-  return getOrCreateProjectDoc(projectId).syncPromise
-}
+/** Get a project doc entry from the cache. Returns Effect needing Atom.Context. */
+export const getProjectDoc = (projectId: string) =>
+  Effect.fnUntraced(function* (get: Atom.Context) {
+    const cache = yield* get.result(projectDocCacheAtom)
+    return yield* cache.get(projectId)
+  })
 
-/** Force flush Y.Doc state to IndexedDB */
-export function flushProjectDoc(projectId: string): Promise<void> {
-  return getOrCreateProjectDoc(projectId).persistence.flush()
-}
+/** Wait for persistence sync. Returns Effect needing Atom.Context. */
+export const syncProjectDoc = (projectId: string) =>
+  Effect.fnUntraced(function* (get: Atom.Context) {
+    const entry = yield* getProjectDoc(projectId)(get)
+    yield* Effect.promise(() => entry.persistence.sync())
+    return entry
+  })
+
+/** Flush Y.Doc state to IndexedDB. Returns Effect needing Atom.Context. */
+export const flushProjectDoc = (projectId: string) =>
+  Effect.fnUntraced(function* (get: Atom.Context) {
+    const entry = yield* getProjectDoc(projectId)(get)
+    yield* Effect.promise(() => entry.persistence.flush())
+  })
 
 // -- Atoms --
 
 /** Whether IndexedDB persistence has synced for this project's Y.Doc */
 export const projectReadyAtom = Atom.family((projectId: string) =>
-  Atom.make((get) => {
-    const { syncPromise } = getOrCreateProjectDoc(projectId)
-    let synced = false
-    syncPromise.then(() => {
-      synced = true
-      get.setSelf(true)
-    })
-    return synced
-  }),
+  projectDocRuntime.atom(
+    syncProjectDoc(projectId),
+  ).pipe(Atom.mapResult(() => true)),
 )
 
 /** Project name, reactive from Y.Doc */
 export const projectNameAtom = Atom.family((projectId: string) => {
-  const { root } = getOrCreateProjectDoc(projectId)
-  return root.focus("name").atom()
+  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
+  return Atom.make((get) => {
+    const result = get(entryAtom)
+    if (!Result.isSuccess(result)) return result
+    const nameAtom = result.value.root.focus("name").atom()
+    return Result.success(get(nameAtom) as string | undefined)
+  })
 })
 
 /** Frames record from Y.Doc, sorted by index */
 export const framesAtom = Atom.family((projectId: string) => {
-  const { root } = getOrCreateProjectDoc(projectId)
-  const rawAtom = root.focus("frames").atom()
+  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
   return Atom.make((get) => {
+    const result = get(entryAtom)
+    if (!Result.isSuccess(result)) return result
+    const rawAtom = result.value.root.focus("frames").atom()
     const record = (get(rawAtom) as Record<string, Frame> | undefined) ?? {}
-    return Object.values(record).sort((a, b) => a.index - b.index)
+    return Result.success(Object.values(record).sort((a, b) => a.index - b.index))
   })
 })
 
 /** Current frame index, reactive from YAwareness */
 export const currentFrameAtom = Atom.family((projectId: string) => {
-  const { awareness } = getOrCreateProjectDoc(projectId)
-  return Atom.map(awareness.atom, (v) => (v as number | undefined) ?? 0)
+  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
+  return Atom.make((get) => {
+    const result = get(entryAtom)
+    if (!Result.isSuccess(result)) return result
+    return Result.success(get(result.value.awareness.atom) as number ?? 0)
+  })
 })
 
-/** Setter for current frame -- synchronous, for use from React and atoms */
-export function setCurrentFrame(projectId: string, index: number) {
-  const { awareness } = getOrCreateProjectDoc(projectId)
-  awareness.set(index)
-}
+/** Setter for current frame — an atom fn that goes through the cache */
+export const setCurrentFrameAtom = Atom.family((projectId: string) =>
+  projectDocRuntime.fn(
+    Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
+      const cache = yield* get.result(projectDocCacheAtom)
+      const entry = yield* cache.get(projectId)
+      entry.awareness.set(index)
+    }),
+  ),
+)

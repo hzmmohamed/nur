@@ -6,7 +6,7 @@ import { FrameId } from "@nur/core"
 import * as S from "effect/Schema"
 import { AppBlobStore } from "./blob-store-layer"
 import { appRegistry } from "./atom-registry"
-import { getProjectDocRoot, waitForPersistence, flushProjectDoc } from "./project-doc-atoms"
+import { getProjectDoc, flushProjectDoc } from "./project-doc-atoms"
 
 // -- Helpers (moved from project.$id.tsx) --
 
@@ -60,11 +60,11 @@ export const importProgressAtom = Atom.family((_projectId: string) =>
 
 export const importFnAtom = Atom.family((projectId: string) =>
   storageRuntime.fn(
-    Effect.fnUntraced(function* (args: ImportArgs) {
-      yield* Effect.promise(() => waitForPersistence(args.projectId))
+    Effect.fnUntraced(function* (args: ImportArgs, get: Atom.FnContext) {
+      const entry = yield* getProjectDoc(args.projectId)(get as any)
+      yield* Effect.promise(() => entry.persistence.sync())
       const { files } = args
-      const root = getProjectDocRoot(args.projectId)
-      const framesRecord = (root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
+      const framesRecord = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
       const startIndex = Object.keys(framesRecord).length
       const store = yield* BlobStore
 
@@ -95,12 +95,12 @@ export const importFnAtom = Atom.family((projectId: string) =>
           width: dims.width,
           height: dims.height,
         }
-        root.focus("frames").focus(id).syncSet(frame)
+        entry.root.focus("frames").focus(id).syncSet(frame)
         frames.push(frame)
       }
 
       appRegistry.set(progressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
-      yield* Effect.promise(() => flushProjectDoc(args.projectId))
+      yield* flushProjectDoc(args.projectId)(get as any)
       return frames
     }),
   ),

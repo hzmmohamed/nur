@@ -8,7 +8,7 @@ import {
   projectNameAtom,
   framesAtom,
   currentFrameAtom,
-  setCurrentFrame,
+  setCurrentFrameAtom,
 } from "../lib/project-doc-atoms"
 import { FrameDropZone } from "../components/frame-drop-zone"
 import { FrameCanvas } from "../components/frame-canvas"
@@ -42,8 +42,8 @@ function ProjectEditorPage() {
     )
   }
 
-  const ready = useAtomValue(projectReadyAtom(id))
-  if (!ready) {
+  const readyResult = useAtomValue(projectReadyAtom(id))
+  if (!Result.isSuccess(readyResult)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
@@ -55,9 +55,16 @@ function ProjectEditorPage() {
 }
 
 function ProjectEditor({ id }: { id: string }) {
-  const name = useAtomValue(projectNameAtom(id)) as string | undefined
-  const frames = useAtomValue(framesAtom(id))
-  const currentFrame = useAtomValue(currentFrameAtom(id))
+  const nameResult = useAtomValue(projectNameAtom(id))
+  const name = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
+
+  const framesResult = useAtomValue(framesAtom(id))
+  const frames = framesResult._tag === "Success" ? framesResult.value : []
+
+  const currentFrameResult = useAtomValue(currentFrameAtom(id))
+  const currentFrame = currentFrameResult._tag === "Success" ? currentFrameResult.value : 0
+
+  const triggerSetFrame = useAtomSet(setCurrentFrameAtom(id))
 
   const mainRef = useRef<HTMLDivElement>(null)
   const canvasSize = useAtomValue(canvasSizeAtom)
@@ -129,11 +136,11 @@ function ProjectEditor({ id }: { id: string }) {
       bindings: [
         {
           key: "ArrowRight",
-          handler: () => setCurrentFrame(id, Math.min(currentFrame + 1, frameCount - 1)),
+          handler: () => triggerSetFrame(Math.min(currentFrame + 1, frameCount - 1)),
         },
         {
           key: "ArrowLeft",
-          handler: () => setCurrentFrame(id, Math.max(currentFrame - 1, 0)),
+          handler: () => triggerSetFrame(Math.max(currentFrame - 1, 0)),
         },
       ],
     })
@@ -180,7 +187,7 @@ function ProjectEditor({ id }: { id: string }) {
         <Timeline
           frameCount={frameCount}
           currentFrame={currentFrame}
-          onFrameSelect={(index) => setCurrentFrame(id, index)}
+          onFrameSelect={(index) => triggerSetFrame(index)}
           width={timelineWidth}
         />
       </div>
