@@ -1,13 +1,18 @@
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
-import { useRef, useCallback, useMemo } from "react"
+import { useRef, useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
-import { useProjectDoc } from "../hooks/use-project-doc"
-import { useCurrentFrame } from "../hooks/use-current-frame"
+import { projectsAtom } from "../hooks/use-project-index"
+import {
+  projectReadyAtom,
+  projectNameAtom,
+  framesAtom,
+  currentFrameAtom,
+  setCurrentFrame,
+} from "../lib/project-doc-atoms"
 import { FrameDropZone } from "../components/frame-drop-zone"
 import { FrameCanvas } from "../components/frame-canvas"
 import { Timeline } from "../components/timeline"
-import type { Frame } from "@nur/core"
 import { importFnAtom, importProgressAtom } from "../lib/import-atoms"
 import {
   registerHotkeyContext,
@@ -24,20 +29,40 @@ export const Route = createFileRoute("/project/$id")({
 
 function ProjectEditorPage() {
   const { id } = Route.useParams()
-  const { root, doc, ready } = useProjectDoc(id)
-  const { currentFrame, setCurrentFrame } = useCurrentFrame(doc)
+  const projects = useAtomValue(projectsAtom)
+
+  if (!(id in projects)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <h1 className="text-2xl font-bold">Project not found</h1>
+        <Button variant="link" asChild>
+          <Link to="/">Go to home</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const ready = useAtomValue(projectReadyAtom(id))
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+      </div>
+    )
+  }
+
+  return <ProjectEditor id={id} />
+}
+
+function ProjectEditor({ id }: { id: string }) {
+  const name = useAtomValue(projectNameAtom(id)) as string | undefined
+  const frames = useAtomValue(framesAtom(id))
+  const currentFrame = useAtomValue(currentFrameAtom(id))
+
   const mainRef = useRef<HTMLDivElement>(null)
   const canvasSize = useAtomValue(canvasSizeAtom)
   const timelineWidth = useAtomValue(timelineWidthAtom)
   const timelineRef = useRef<HTMLDivElement>(null)
-
-  // Reactive frames from Y.Doc
-  const framesAtom = useMemo(() => root.focus("frames").atom(), [root])
-  const framesRecord = useAtomValue(framesAtom) as Record<string, Frame> | undefined
-  const frames = useMemo(() => {
-    const record = framesRecord ?? {}
-    return Object.values(record).sort((a, b) => a.index - b.index)
-  }, [framesRecord])
 
   const frameCount = frames.length
   const currentFrameData = frames.find((f) => f.index === currentFrame)
@@ -61,79 +86,60 @@ function ProjectEditorPage() {
   })
 
   const handleFilesSelected = useCallback((files: FileList) => {
-    triggerImport({ files, root, startIndex: frameCount })
-  }, [triggerImport, root, frameCount])
+    triggerImport({ files, projectId: id })
+  }, [triggerImport, id])
 
   // Canvas resize observer
-  const canvasResizeAtom = useMemo(() =>
-    Atom.make((get) => {
-      const el = mainRef.current
-      if (!el) return
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries[0]
-        if (entry) {
-          get.set(canvasSizeAtom, {
-            width: Math.floor(entry.contentRect.width),
-            height: Math.floor(entry.contentRect.height),
-          })
-        }
-      })
-      observer.observe(el)
-      get.addFinalizer(() => observer.disconnect())
-    }),
-    [],
-  )
+  const canvasResizeAtom = Atom.make((get) => {
+    const el = mainRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        get.set(canvasSizeAtom, {
+          width: Math.floor(entry.contentRect.width),
+          height: Math.floor(entry.contentRect.height),
+        })
+      }
+    })
+    observer.observe(el)
+    get.addFinalizer(() => observer.disconnect())
+  })
   useAtomMount(canvasResizeAtom)
 
   // Timeline width observer
-  const timelineResizeAtom = useMemo(() =>
-    Atom.make((get) => {
-      const el = timelineRef.current
-      if (!el) return
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries[0]
-        if (entry) {
-          get.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
-        }
-      })
-      observer.observe(el)
-      get.addFinalizer(() => observer.disconnect())
-    }),
-    [],
-  )
+  const timelineResizeAtom = Atom.make((get) => {
+    const el = timelineRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        get.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
+      }
+    })
+    observer.observe(el)
+    get.addFinalizer(() => observer.disconnect())
+  })
   useAtomMount(timelineResizeAtom)
 
   // Register hotkey context for arrow key navigation
-  const hotkeyAtom = useMemo(() =>
-    Atom.make((get) => {
-      registerHotkeyContext({
-        id: "editor",
-        bindings: [
-          {
-            key: "ArrowRight",
-            handler: () => setCurrentFrame(Math.min(currentFrame + 1, frameCount - 1)),
-          },
-          {
-            key: "ArrowLeft",
-            handler: () => setCurrentFrame(Math.max(currentFrame - 1, 0)),
-          },
-        ],
-      })
-      get.addFinalizer(() => unregisterHotkeyContext("editor"))
-    }),
-    [currentFrame, frameCount, setCurrentFrame],
-  )
+  const hotkeyAtom = Atom.make((get) => {
+    registerHotkeyContext({
+      id: "editor",
+      bindings: [
+        {
+          key: "ArrowRight",
+          handler: () => setCurrentFrame(id, Math.min(currentFrame + 1, frameCount - 1)),
+        },
+        {
+          key: "ArrowLeft",
+          handler: () => setCurrentFrame(id, Math.max(currentFrame - 1, 0)),
+        },
+      ],
+    })
+    get.addFinalizer(() => unregisterHotkeyContext("editor"))
+  })
   useAtomMount(hotkeyAtom)
-
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
-      </div>
-    )
-  }
-
-  const name = root.focus("name").syncGet() || "Untitled"
 
   return (
     <div className="h-screen flex flex-col">
@@ -141,7 +147,7 @@ function ProjectEditorPage() {
         <Button variant="link" asChild>
           <Link to="/">Back</Link>
         </Button>
-        <h1 className="text-lg font-semibold">{name}</h1>
+        <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
         <p className="text-sm text-muted-foreground">
           {frameCount} frames
         </p>
@@ -174,7 +180,7 @@ function ProjectEditorPage() {
         <Timeline
           frameCount={frameCount}
           currentFrame={currentFrame}
-          onFrameSelect={setCurrentFrame}
+          onFrameSelect={(index) => setCurrentFrame(id, index)}
           width={timelineWidth}
         />
       </div>
