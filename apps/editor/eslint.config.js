@@ -12,7 +12,7 @@ export default tseslint.config(
         paths: [
           {
             name: "react",
-            importNames: ["useEffect", "useState"],
+            importNames: ["useEffect", "useState", "useMemo"],
             message: "Use effect-atom instead. See CLAUDE.md → effect-atom docs.",
           },
         ],
