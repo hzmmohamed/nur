@@ -13,6 +13,7 @@ interface ProjectDocEntry {
   readonly doc: ReturnType<typeof createProjectDoc>["doc"]
   readonly persistence: ReturnType<typeof createProjectDoc>["persistence"]
   readonly awareness: ReturnType<typeof createCurrentFrameIndex>
+  readonly syncPromise: Promise<void>
 }
 
 const docCache = new Map<string, ProjectDocEntry>()
@@ -30,7 +31,8 @@ function getOrCreateProjectDoc(projectId: string): ProjectDocEntry {
       viewport: { x: 0, y: 0, zoom: 1 },
     })
     const frameIndex = createCurrentFrameIndex(awareness)
-    entry = { root, doc, persistence, awareness: frameIndex }
+    const syncPromise = persistence.sync()
+    entry = { root, doc, persistence, awareness: frameIndex, syncPromise }
     docCache.set(projectId, entry)
   }
   return entry
@@ -46,12 +48,13 @@ export function getProjectDocRoot(projectId: string) {
 /** Whether IndexedDB persistence has synced for this project's Y.Doc */
 export const projectReadyAtom = Atom.family((projectId: string) =>
   Atom.make((get) => {
-    const { persistence } = getOrCreateProjectDoc(projectId)
-    if (persistence.synced) return true
-    const handler = () => get.setSelf(true)
-    persistence.once("synced", handler)
-    get.addFinalizer(() => persistence.off("synced", handler))
-    return false
+    const { syncPromise } = getOrCreateProjectDoc(projectId)
+    let synced = false
+    syncPromise.then(() => {
+      synced = true
+      get.setSelf(true)
+    })
+    return synced
   }),
 )
 
