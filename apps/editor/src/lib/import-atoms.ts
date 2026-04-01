@@ -1,13 +1,12 @@
 import * as Effect from "effect/Effect"
 import { Atom } from "@effect-atom/atom"
 import { BlobStore } from "@nur/object-store"
-import { sortFramesByName, type PreparedFrame, type Frame } from "@nur/core"
+import { sortFramesByName, type Frame } from "@nur/core"
 import { FrameId } from "@nur/core"
-import type { YDocumentRoot } from "effect-yjs"
-import type { ProjectDoc } from "@nur/core"
 import * as S from "effect/Schema"
 import { AppBlobStore } from "./blob-store-layer"
 import { appRegistry } from "./atom-registry"
+import { getProjectDocRoot } from "./project-doc-atoms"
 
 // -- Helpers (moved from project.$id.tsx) --
 
@@ -46,8 +45,7 @@ export interface ImportProgress {
 
 export interface ImportArgs {
   readonly files: FileList
-  readonly root: YDocumentRoot<ProjectDoc>
-  readonly startIndex: number
+  readonly projectId: string
 }
 
 // -- Atoms --
@@ -63,7 +61,10 @@ export const importProgressAtom = Atom.family((_projectId: string) =>
 export const importFnAtom = Atom.family((projectId: string) =>
   storageRuntime.fn(
     Effect.fnUntraced(function* (args: ImportArgs) {
-      const { files, root, startIndex } = args
+      const { files } = args
+      const root = getProjectDocRoot(args.projectId)
+      const framesRecord = (root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
+      const startIndex = Object.keys(framesRecord).length
       const store = yield* BlobStore
 
       const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"))
