@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo } from "react"
+import { useRef, useCallback } from "react"
 import { Atom } from "@effect-atom/atom"
 import { useAtom, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { Stage, Layer, Rect, Text, Line } from "react-konva"
@@ -16,6 +16,56 @@ const HEADER_HEIGHT = 20
 
 const zoomLevelAtom = Atom.make(1)
 const isScrubbingAtom = Atom.make(false)
+
+function renderFrameCells(
+  frameCount: number,
+  currentFrame: number,
+  cellWidth: number,
+  zoomLevel: number,
+) {
+  const cells: Array<React.ReactElement> = []
+  const labelInterval = zoomLevel >= 1 ? 1 : zoomLevel >= 0.5 ? 5 : 10
+
+  for (let i = 0; i < frameCount; i++) {
+    const x = i * cellWidth
+    const isActive = i === currentFrame
+
+    if (isActive) {
+      cells.push(
+        <Rect key={`bg-${i}`} x={x} y={HEADER_HEIGHT} width={cellWidth}
+          height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="rgba(59, 130, 246, 0.3)" />
+      )
+    }
+
+    cells.push(
+      <Line key={`border-${i}`} points={[x, HEADER_HEIGHT, x, TIMELINE_HEIGHT]}
+        stroke="#3f3f46" strokeWidth={1} />
+    )
+
+    if ((i + 1) % labelInterval === 0 || i === 0) {
+      cells.push(
+        <Text key={`label-${i}`} x={x} y={4} width={cellWidth}
+          text={`${i + 1}`} fontSize={10} fill="#a1a1aa" align="center" />
+      )
+    }
+
+    if (i > 0 && i % 10 === 0) {
+      cells.push(
+        <Rect key={`marker-${i}`} x={x} y={HEADER_HEIGHT}
+          width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="#71717a" />
+      )
+    }
+  }
+
+  if (currentFrame >= 0 && currentFrame < frameCount) {
+    cells.push(
+      <Rect key="playhead" x={currentFrame * cellWidth} y={0}
+        width={2} height={TIMELINE_HEIGHT} fill="#3b82f6" />
+    )
+  }
+
+  return cells
+}
 
 export function Timeline(props: TimelineProps) {
   const { frameCount, currentFrame, onFrameSelect, width } = props
@@ -49,95 +99,46 @@ export function Timeline(props: TimelineProps) {
   )
 
   // Global mouse events for scrubbing
-  const scrubbingListenerAtom = useMemo(() =>
-    Atom.make((get) => {
-      const scrubbing = get(isScrubbingAtom)
-      if (!scrubbing) return
+  const scrubbingListenerAtom = Atom.make((get) => {
+    const scrubbing = get(isScrubbingAtom)
+    if (!scrubbing) return
 
-      const handleMouseMove = (e: MouseEvent) => {
-        onFrameSelect(positionToFrame(e.clientX))
-      }
-      const handleMouseUp = () => get.set(isScrubbingAtom, false)
+    const handleMouseMove = (e: MouseEvent) => {
+      onFrameSelect(positionToFrame(e.clientX))
+    }
+    const handleMouseUp = () => get.set(isScrubbingAtom, false)
 
-      document.addEventListener("mousemove", handleMouseMove)
-      document.addEventListener("mouseup", handleMouseUp)
-      get.addFinalizer(() => {
-        document.removeEventListener("mousemove", handleMouseMove)
-        document.removeEventListener("mouseup", handleMouseUp)
-      })
-    }),
-    [onFrameSelect, positionToFrame],
-  )
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+    get.addFinalizer(() => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    })
+  })
   useAtomMount(scrubbingListenerAtom)
 
   // Ctrl + scroll wheel zoom
-  const wheelZoomAtom = useMemo(() =>
-    Atom.make((get) => {
-      const container = containerRef.current
-      if (!container) return
+  const wheelZoomAtom = Atom.make((get) => {
+    const container = containerRef.current
+    if (!container) return
 
-      const handleWheel = (e: WheelEvent) => {
-        if (e.ctrlKey) {
-          e.preventDefault()
-          const prev = get.once(zoomLevelAtom)
-          const next = e.deltaY < 0
-            ? Math.min(5, prev + 0.1)
-            : Math.max(0.5, prev - 0.1)
-          get.set(zoomLevelAtom, parseFloat(next.toFixed(1)))
-        }
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault()
+        const prev = get.once(zoomLevelAtom)
+        const next = e.deltaY < 0
+          ? Math.min(5, prev + 0.1)
+          : Math.max(0.5, prev - 0.1)
+        get.set(zoomLevelAtom, parseFloat(next.toFixed(1)))
       }
-      container.addEventListener("wheel", handleWheel, { passive: false })
-      get.addFinalizer(() => container.removeEventListener("wheel", handleWheel))
-    }),
-    [],
-  )
+    }
+    container.addEventListener("wheel", handleWheel, { passive: false })
+    get.addFinalizer(() => container.removeEventListener("wheel", handleWheel))
+  })
   useAtomMount(wheelZoomAtom)
 
   // Render frame cells
-  const frameCells = useMemo(() => {
-    const cells: Array<React.ReactElement> = []
-    const labelInterval = zoomLevel >= 1 ? 1 : zoomLevel >= 0.5 ? 5 : 10
-
-    for (let i = 0; i < frameCount; i++) {
-      const x = i * cellWidth
-      const isActive = i === currentFrame
-
-      if (isActive) {
-        cells.push(
-          <Rect key={`bg-${i}`} x={x} y={HEADER_HEIGHT} width={cellWidth}
-            height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="rgba(59, 130, 246, 0.3)" />
-        )
-      }
-
-      cells.push(
-        <Line key={`border-${i}`} points={[x, HEADER_HEIGHT, x, TIMELINE_HEIGHT]}
-          stroke="#3f3f46" strokeWidth={1} />
-      )
-
-      if ((i + 1) % labelInterval === 0 || i === 0) {
-        cells.push(
-          <Text key={`label-${i}`} x={x} y={4} width={cellWidth}
-            text={`${i + 1}`} fontSize={10} fill="#a1a1aa" align="center" />
-        )
-      }
-
-      if (i > 0 && i % 10 === 0) {
-        cells.push(
-          <Rect key={`marker-${i}`} x={x} y={HEADER_HEIGHT}
-            width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="#71717a" />
-        )
-      }
-    }
-
-    if (currentFrame >= 0 && currentFrame < frameCount) {
-      cells.push(
-        <Rect key="playhead" x={currentFrame * cellWidth} y={0}
-          width={2} height={TIMELINE_HEIGHT} fill="#3b82f6" />
-      )
-    }
-
-    return cells
-  }, [frameCount, currentFrame, cellWidth, zoomLevel])
+  const frameCells = renderFrameCells(frameCount, currentFrame, cellWidth, zoomLevel)
 
   if (frameCount === 0) {
     return (
