@@ -72,6 +72,12 @@ export const flushProjectDoc = (projectId: string) =>
     yield* Effect.promise(() => entry.persistence.flush())
   })
 
+// -- Shared entry atom per project (single cache lookup, shared across all derived atoms) --
+
+const projectDocEntryAtom = Atom.family((projectId: string) =>
+  projectDocRuntime.atom(getProjectDoc(projectId)),
+)
+
 // -- Atoms --
 
 /** Whether IndexedDB persistence has synced for this project's Y.Doc */
@@ -83,22 +89,25 @@ export const projectReadyAtom = Atom.family((projectId: string) =>
 
 /** Project name, reactive from Y.Doc */
 export const projectNameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
+  const entryAtom = projectDocEntryAtom(projectId)
+  // Create inner atom once (lazily on first success), not on every recompute
+  let nameAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
   return Atom.make((get) => {
     const result = get(entryAtom)
     if (!Result.isSuccess(result)) return result
-    const nameAtom = result.value.root.focus("name").atom()
+    if (!nameAtom) nameAtom = result.value.root.focus("name").atom()
     return Result.success(get(nameAtom) as string | undefined)
   })
 })
 
 /** Frames record from Y.Doc, sorted by index */
 export const framesAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
+  const entryAtom = projectDocEntryAtom(projectId)
+  let rawAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
   return Atom.make((get) => {
     const result = get(entryAtom)
     if (!Result.isSuccess(result)) return result
-    const rawAtom = result.value.root.focus("frames").atom()
+    if (!rawAtom) rawAtom = result.value.root.focus("frames").atom()
     const record = (get(rawAtom) as Record<string, Frame> | undefined) ?? {}
     return Result.success(Object.values(record).sort((a, b) => a.index - b.index))
   })
@@ -106,10 +115,11 @@ export const framesAtom = Atom.family((projectId: string) => {
 
 /** Current frame index, reactive from YAwareness */
 export const currentFrameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocRuntime.atom(getProjectDoc(projectId))
+  const entryAtom = projectDocEntryAtom(projectId)
   return Atom.make((get) => {
     const result = get(entryAtom)
     if (!Result.isSuccess(result)) return result
+    // awareness.atom is already a stable reference, no need to cache
     return Result.success(get(result.value.awareness.atom) as number ?? 0)
   })
 })
