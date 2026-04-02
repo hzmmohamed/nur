@@ -118,19 +118,32 @@ export const canvasAtom = Atom.family((projectId: string) =>
     }
 
     function syncPaths(frameId: string | null) {
-      disposeAllPaths()
-      currentFrameId = frameId
+      // Frame changed — dispose all and rebuild
+      if (frameId !== currentFrameId) {
+        disposeAllPaths()
+        currentFrameId = frameId
+      }
       if (!frameId) return
 
       const pathsLens = (root.focus("frames").focus(frameId) as any).focus("paths")
       const pathsRecord = pathsLens.syncGet() ?? {}
       const pathKeys = Object.keys(pathsRecord)
+      const pathKeysSet = new Set(pathKeys)
 
-      log.withContext({ frameId, pathKeys }).info("syncPaths")
+      log.withContext({ frameId, pathKeys, existing: MutableHashMap.size(paths) }).info("syncPaths")
 
+      // Remove paths that no longer exist
+      MutableHashMap.forEach(paths, (bp, id) => {
+        if (!pathKeysSet.has(id)) {
+          bp.dispose()
+          MutableHashMap.remove(paths, id)
+        }
+      })
+
+      // Add paths that are new
       const activePathId = getActivePathId()
-
       for (const pathId of pathKeys) {
+        if (MutableHashMap.has(paths, pathId)) continue
         const pathLens = pathsLens.focus(pathId)
         const bp = new BezierPath(pathLens, pathsLayer, {
           onSelect: () => appRegistry.set(setActivePathIdAtom(projectId), pathId),
