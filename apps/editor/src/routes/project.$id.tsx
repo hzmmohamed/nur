@@ -189,7 +189,6 @@ function ProjectEditor() {
           frameCount={frameCount}
           currentFrame={currentFrame}
           onFrameSelect={(index) => triggerSetFrame(index)}
-          width={0}
         />
       }
     />

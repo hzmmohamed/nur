@@ -10,7 +10,7 @@ export function ToolRail() {
 
   return (
     <div
-      className="flex flex-col items-center gap-1 py-2 w-12 flex-shrink-0 border-r border-border bg-background"
+      className="flex flex-col items-center gap-1 pt-2 w-12 h-full border-r border-border bg-background/80 backdrop-blur-sm"
       role="toolbar"
       aria-label="Drawing tools"
       aria-orientation="vertical"
