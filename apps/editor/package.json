@@ -17,6 +17,7 @@
     "@effect-atom/atom-react": "^0.5.0",
     "@effect/platform": "^0.96.0",
     "@effect/platform-browser": "^0.76.0",
+    "@fontsource-variable/inter": "^5.2.8",
     "@nur/core": "workspace:*",
     "@nur/object-store": "workspace:*",
     "@nur/pen-tool": "workspace:*",

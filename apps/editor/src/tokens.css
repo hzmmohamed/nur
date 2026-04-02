@@ -69,7 +69,7 @@
   --radius-xl: 0.75rem;
 
   /* -- Typography -- */
-  --font-family-sans: system-ui, -apple-system, sans-serif;
+  --font-family-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
   --font-family-mono: ui-monospace, monospace;
 
   --font-size-xs: 0.75rem;

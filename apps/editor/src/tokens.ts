@@ -111,7 +111,7 @@ export const tokens = {
 
   // -- Typography --
   fontFamily: {
-    sans: "system-ui, -apple-system, sans-serif",
+    sans: "'Inter Variable', system-ui, -apple-system, sans-serif",
     mono: "ui-monospace, monospace",
   },
 
