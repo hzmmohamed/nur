@@ -1,5 +1,5 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { projectDocEntryAtom, projectDocRuntime, getProjectDoc } from "./project-doc-atoms"
+import { projectDocEntryAtom, projectDocRuntime } from "./project-doc-atoms"
 import * as Effect from "effect/Effect"
 
 /** Active tool — read/write from awareness. "select" | "pen" */
@@ -30,7 +30,7 @@ export const activePathIdAtom = Atom.family((projectId: string) => {
 export const setActiveToolAtom = Atom.family((projectId: string) =>
   projectDocRuntime.fn(
     Effect.fnUntraced(function* (tool: string, get: Atom.FnContext) {
-      const entry = yield* getProjectDoc(projectId)(get as any)
+      const entry = yield* get.result(projectDocEntryAtom(projectId))
       entry.awareness.local.focus("activeTool").syncSet(tool)
     }),
   ),
@@ -40,7 +40,7 @@ export const setActiveToolAtom = Atom.family((projectId: string) =>
 export const setActivePathIdAtom = Atom.family((projectId: string) =>
   projectDocRuntime.fn(
     Effect.fnUntraced(function* (pathId: string | null, get: Atom.FnContext) {
-      const entry = yield* getProjectDoc(projectId)(get as any)
+      const entry = yield* get.result(projectDocEntryAtom(projectId))
       ;(entry.awareness.local.focus("activePathId") as any).syncSet(pathId)
     }),
   ),

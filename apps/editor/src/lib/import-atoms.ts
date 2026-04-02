@@ -6,7 +6,7 @@ import { FrameId } from "@nur/core"
 import * as S from "effect/Schema"
 import { AppBlobStore } from "./blob-store-layer"
 import { appRegistry } from "./atom-registry"
-import { getProjectDoc, flushProjectDoc } from "./project-doc-atoms"
+import { projectDocEntryAtom } from "./project-doc-atoms"
 
 // -- Helpers (moved from project.$id.tsx) --
 
@@ -61,8 +61,7 @@ export const importProgressAtom = Atom.family((_projectId: string) =>
 export const importFnAtom = Atom.family((projectId: string) =>
   storageRuntime.fn(
     Effect.fnUntraced(function* (args: ImportArgs, get: Atom.FnContext) {
-      const entry = yield* getProjectDoc(args.projectId)(get as any)
-      yield* Effect.promise(() => entry.persistence.sync())
+      const entry = yield* get.result(projectDocEntryAtom(args.projectId))
       const { files } = args
       const framesRecord = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
       const startIndex = Object.keys(framesRecord).length
@@ -101,7 +100,7 @@ export const importFnAtom = Atom.family((projectId: string) =>
       }
 
       appRegistry.set(progressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
-      yield* flushProjectDoc(args.projectId)(get as any)
+      yield* Effect.promise(() => entry.persistence.flush())
       return frames
     }),
   ),
