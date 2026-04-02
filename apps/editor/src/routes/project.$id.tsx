@@ -105,10 +105,11 @@ function ProjectEditorPage() {
     )
   }
 
-  return <ProjectEditor />
+  const projectMeta = projects[id]
+  return <ProjectEditor lastModified={projectMeta?.updatedAt} />
 }
 
-function ProjectEditor() {
+function ProjectEditor({ lastModified }: { lastModified?: number }) {
   // -- Mount reactive atoms --
   useAtomMount(canvasAtom)
   useAtomMount(editorHotkeyAtom)
@@ -160,14 +161,6 @@ function ProjectEditor() {
             <Link to="/">Back</Link>
           </Button>
           <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
-          <p className="text-sm text-muted-foreground">
-            {frameCount} frames
-          </p>
-          {frameCount > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Frame {currentFrame + 1} / {frameCount}
-            </p>
-          )}
         </header>
       }
       canvas={
@@ -189,6 +182,7 @@ function ProjectEditor() {
           frameCount={frameCount}
           currentFrame={currentFrame}
           onFrameSelect={(index) => triggerSetFrame(index)}
+          lastModified={lastModified}
         />
       }
     />

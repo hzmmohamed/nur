@@ -9,6 +9,19 @@ interface TimelineProps {
   frameCount: number
   currentFrame: number
   onFrameSelect: (index: number) => void
+  lastModified?: number
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 10) return "just now"
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return new Date(timestamp).toLocaleDateString()
 }
 
 const CELL_W = tokens.timeline.cellBaseWidth
@@ -16,8 +29,11 @@ const HEADER_H = tokens.timeline.headerHeight
 const ROW_H = 28
 const LABEL_W = 160
 
+const FPS = 24
+
 const zoomLevelAtom = Atom.make(1)
 const isScrubbingAtom = Atom.make(false)
+const showTimeAtom = Atom.make(false)
 
 // -- Scrubbing --
 
@@ -41,8 +57,9 @@ appRegistry.subscribe(isScrubbingAtom, (scrubbing) => {
 
 // -- Component --
 
-export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelineProps) {
+export function Timeline({ frameCount, currentFrame, onFrameSelect, lastModified }: TimelineProps) {
   const [zoomLevel] = useAtom(zoomLevelAtom)
+  const [showTime, setShowTime] = useAtom(showTimeAtom)
   const layersResult = useAtomValue(layersAtom)
   const layers = Result.isSuccess(layersResult) ? layersResult.value : []
   const activeLayerIdResult = useAtomValue(activeLayerIdAtom)
@@ -228,7 +245,7 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
                 fill={tokens.color.timeline.label}
                 fontSize={tokens.timeline.labelFontSize}
               >
-                {i + 1}
+                {showTime ? `${(i / FPS).toFixed(1)}s` : i + 1}
               </text>
             ) : null
           })}
@@ -305,32 +322,75 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
       </div>
       </div>
 
-      {/* Zoom bar */}
-      {frameCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-1 border-t border-border text-xs text-muted-foreground flex-shrink-0">
-          <button
-            onClick={handleZoomReset}
-            className="p-0.5 rounded hover:bg-accent/50 transition-colors"
-            aria-label="Reset zoom"
-            title="Reset zoom"
-          >
-            <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
-            </svg>
-          </button>
-          <input
-            type="range"
-            min="0.5"
-            max="5"
-            step="0.1"
-            value={zoomLevel}
-            onChange={handleZoomSlider}
-            className="w-20 h-1 accent-muted-foreground cursor-pointer"
-            aria-label="Timeline zoom"
-          />
-          <span className="w-8 text-right tabular-nums">{Math.round(zoomLevel * 100)}%</span>
-        </div>
-      )}
+      {/* Footer bar */}
+      <div className="flex items-center gap-3 px-3 py-1 border-t border-border text-xs text-muted-foreground flex-shrink-0">
+        {/* Frame stats */}
+        {frameCount > 0 && (
+          <>
+            <span className="tabular-nums">
+              {showTime
+                ? `${(currentFrame / FPS).toFixed(2)}s / ${(frameCount / FPS).toFixed(1)}s`
+                : `Frame ${currentFrame + 1} / ${frameCount}`
+              }
+            </span>
+            <button
+              onClick={() => setShowTime(!showTime)}
+              className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+              aria-label={showTime ? "Show frame numbers" : "Show timecodes"}
+              title={showTime ? "Show frame numbers" : "Show timecodes"}
+            >
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                {showTime ? (
+                  <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 12h8M12 8v8" /></>
+                ) : (
+                  <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>
+                )}
+              </svg>
+            </button>
+            <span className="text-border">·</span>
+            <span className="tabular-nums">
+              {(frameCount / FPS).toFixed(1)}s @{FPS}fps
+            </span>
+          </>
+        )}
+        {frameCount === 0 && <span>No frames</span>}
+
+        {lastModified && (
+          <>
+            <span className="text-border">·</span>
+            <span>Saved {formatRelativeTime(lastModified)}</span>
+          </>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Zoom controls */}
+        {frameCount > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomReset}
+              className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+              </svg>
+            </button>
+            <input
+              type="range"
+              min="0.5"
+              max="5"
+              step="0.1"
+              value={zoomLevel}
+              onChange={handleZoomSlider}
+              className="w-20 h-1 accent-muted-foreground cursor-pointer"
+              aria-label="Timeline zoom"
+            />
+            <span className="w-8 text-right tabular-nums">{Math.round(zoomLevel * 100)}%</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
