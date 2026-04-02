@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
-import { useRef, useCallback, useEffect } from "react"
+import { useRef, useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import Konva from "konva"
@@ -99,25 +99,25 @@ function ProjectEditor({ id }: { id: string }) {
   const activePathId = Result.isSuccess(pathIdResult) ? pathIdResult.value : null
   const setActivePathId = useAtomSet(setActivePathIdAtom(id))
 
-  // -- PathsOverlay lifecycle --
-  useEffect(() => {
+  // -- PathsOverlay lifecycle (atom-based, no useEffect) --
+  const overlayAtom = Atom.make((get) => {
     const stage = canvasRef.current?.getStage()
     if (!stage || !entry) return
-
     const overlay = new PathsOverlay(stage, entry.root)
     overlayRef.current = overlay
     overlay.setFrame(currentFrameData?.id ?? null)
-
-    return () => {
+    get.addFinalizer(() => {
       overlay.dispose()
       overlayRef.current = null
-    }
-  }, [entry]) // eslint-disable-line react-hooks/exhaustive-deps
+    })
+  })
+  useAtomMount(overlayAtom)
 
   // Update overlay when frame changes
-  useEffect(() => {
+  const frameChangeAtom = Atom.make(() => {
     overlayRef.current?.setFrame(currentFrameData?.id ?? null)
-  }, [currentFrameData?.id])
+  })
+  useAtomMount(frameChangeAtom)
 
   // -- Stage click handler for pen tool --
   const handleStageClick = useCallback((stage: Konva.Stage) => {
