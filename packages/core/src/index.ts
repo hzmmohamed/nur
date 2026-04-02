@@ -7,4 +7,4 @@ export { ProjectDocSchema, type ProjectDoc, createProjectDoc } from "./project-d
 export { AwarenessSchema, ViewportSchema, type AwarenessState, type Viewport } from "./schemas/awareness"
 export { createCurrentFrameIndex } from "./frame-atoms"
 export { importFrames, sortFramesByName, type PreparedFrame } from "./frame-import"
-export { createYDocPersistence, type YDocPersistence } from "./ydoc-persistence"
+export { makeYDocPersistence, type YDocPersistence } from "./ydoc-persistence"

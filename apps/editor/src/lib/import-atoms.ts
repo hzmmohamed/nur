@@ -90,7 +90,7 @@ export const importFnAtom = storageRuntime.fn(
     }
 
     appRegistry.set(importProgressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
-    yield* Effect.promise(() => entry.persistence.flush())
+    yield* entry.persistence.flush()
     return frames
   }),
 )

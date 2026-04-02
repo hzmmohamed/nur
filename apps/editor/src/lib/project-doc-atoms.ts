@@ -1,5 +1,6 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { createCurrentFrameIndex, ProjectId, ProjectDocSchema, createYDocPersistence, type Frame, type AwarenessState } from "@nur/core"
+import { createCurrentFrameIndex, ProjectId, ProjectDocSchema, type Frame, type AwarenessState } from "@nur/core"
+import { makeYDocPersistence, type YDocPersistence } from "@nur/core"
 import { YAwareness, YDocument, type YAwarenessHandle } from "effect-yjs"
 import { AwarenessSchema } from "@nur/core"
 import * as S from "effect/Schema"
@@ -16,7 +17,7 @@ const parseProjectId = S.decodeSync(ProjectId)
 export interface ProjectDocEntry {
   readonly root: ReturnType<typeof YDocument.bind<typeof ProjectDocSchema.fields>>
   readonly doc: Y.Doc
-  readonly persistence: ReturnType<typeof createYDocPersistence>
+  readonly persistence: YDocPersistence
   readonly awareness: YAwarenessHandle<AwarenessState>
   readonly currentFrameIndex: ReturnType<typeof createCurrentFrameIndex>
 }
@@ -29,47 +30,38 @@ export const projectDocRuntime = Atom.runtime(Layer.empty)
 
 export const activeProjectIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
 
-// -- Project doc entry: one per project, includes persistence sync --
+// -- Project doc entry: one per project, scoped persistence --
 
-export const projectDocEntryAtom = Atom.family((projectId: string) =>
+export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result<ProjectDocEntry>> = Atom.family((projectId: string) =>
   projectDocRuntime.atom(
     Effect.gen(function* () {
-      log.withContext({ projectId }).info("creating Y.Doc")
-      const id = parseProjectId(projectId)
-      const doc = new Y.Doc()
-      const persistence = createYDocPersistence(`nur-project-${id}`, doc)
+        log.withContext({ projectId }).info("creating Y.Doc")
+        const id = parseProjectId(projectId)
+        const doc = new Y.Doc()
 
-      log.withContext({ projectId }).info("starting persistence.sync()")
-      yield* Effect.promise(() => persistence.sync())
+        // Scoped persistence — hydrates doc from IndexedDB, attaches update handler
+        // Scope finalization detaches handler and closes db
+        const persistence = yield* makeYDocPersistence(`nur-project-${id}`, doc)
 
-      // Bind lens AFTER sync so the lens sees the hydrated Y.Doc state
-      const root = YDocument.bind(ProjectDocSchema, doc)
+        // Bind lens AFTER hydration — sees full Y.Doc state
+        const root = YDocument.bind(ProjectDocSchema, doc)
 
-      // Check both raw Y.Map and lens to diagnose persistence issues
-      const rootMap = doc.getMap("root")
-      const rawFramesYMap = rootMap.get("frames")
-      const rawFrameKeysFromYMap = rawFramesYMap instanceof Y.Map ? Array.from(rawFramesYMap.keys()) : []
-      const rawFrames = root.focus("frames").syncGet()
-      const frameKeysFromLens = rawFrames ? Object.keys(rawFrames) : []
-      log.withContext({
-        projectId,
-        rootMapKeys: Array.from(rootMap.keys()),
-        framesFromYMap: rawFrameKeysFromYMap.length,
-        framesFromLens: frameKeysFromLens.length,
-        docStateSize: Y.encodeStateAsUpdate(doc).byteLength,
-      }).info("sync complete")
+        const rootMap = doc.getMap("root")
+        const rawFramesYMap = rootMap.get("frames")
+        const frameCount = rawFramesYMap instanceof Y.Map ? rawFramesYMap.size : 0
+        log.withContext({ projectId, frameCount, docStateSize: Y.encodeStateAsUpdate(doc).byteLength }).info("entry ready")
 
-      const awareness = YAwareness.make(AwarenessSchema, doc)
-      awareness.local.syncSet({
-        currentFrame: 0,
-        activeTool: "select",
-        activePathId: null,
-        selection: [],
-        viewport: { x: 0, y: 0, zoom: 1 },
-      })
-      const currentFrameIndex = createCurrentFrameIndex(awareness)
-      log.withContext({ projectId }).info("entry ready")
-      return { root, doc, persistence, awareness, currentFrameIndex } satisfies ProjectDocEntry
+        const awareness = YAwareness.make(AwarenessSchema, doc)
+        awareness.local.syncSet({
+          currentFrame: 0,
+          activeTool: "select",
+          activePathId: null,
+          selection: [],
+          viewport: { x: 0, y: 0, zoom: 1 },
+        })
+        const currentFrameIndex = createCurrentFrameIndex(awareness)
+
+        return { root, doc, persistence, awareness, currentFrameIndex } satisfies ProjectDocEntry
     }),
   ).pipe(Atom.keepAlive),
 )
@@ -78,7 +70,7 @@ export const projectDocEntryAtom = Atom.family((projectId: string) =>
 
 export const activeEntryAtom = Atom.make((get): Result.Result<ProjectDocEntry> => {
   const projectId = get(activeProjectIdAtom)
-  if (!projectId) return Result.initial()
+  if (!projectId) return Result.initial() as Result.Result<ProjectDocEntry>
   return get(projectDocEntryAtom(projectId))
 })
 
@@ -141,9 +133,3 @@ export const setCurrentFrameAtom = projectDocRuntime.fn(
     entry.currentFrameIndex.set(index)
   }),
 )
-
-/** Flush Y.Doc state to IndexedDB for active project */
-export const flushProjectDoc = Effect.fnUntraced(function* (get: Atom.Context) {
-  const entry = yield* get.result(activeEntryAtom)
-  yield* Effect.promise(() => entry.persistence.flush())
-})

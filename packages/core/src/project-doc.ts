@@ -1,6 +1,5 @@
 import * as S from "effect/Schema"
 import { YDocument } from "effect-yjs"
-import { createYDocPersistence } from "./ydoc-persistence"
 import { FrameSchema } from "./schemas/frame"
 import type { ProjectId } from "./schemas/ids"
 
@@ -11,8 +10,8 @@ export const ProjectDocSchema = S.Struct({
 
 export type ProjectDoc = S.Schema.Type<typeof ProjectDocSchema>
 
-export function createProjectDoc(projectId: ProjectId) {
+/** Create a fresh Y.Doc with the ProjectDoc schema. No persistence — caller manages that. */
+export function createProjectDoc(_projectId: ProjectId) {
   const { doc, root } = YDocument.make(ProjectDocSchema)
-  const persistence = createYDocPersistence(`nur-project-${projectId}`, doc)
-  return { doc, root, persistence }
+  return { doc, root }
 }
