@@ -1,6 +1,9 @@
 import { Atom } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
-import { syncGet, syncSet } from "../lib/atom-registry"
+import { syncSet } from "../lib/atom-registry"
+import { createModuleLogger } from "../lib/logger"
+
+const hkLog = createModuleLogger("hotkey-manager")
 
 // -- Types --
 
@@ -32,35 +35,39 @@ function parseKey(e: KeyboardEvent): string {
   return parts.join("+")
 }
 
-function getActiveBindings(): ReadonlyArray<HotkeyBinding> {
-  const activeId = syncGet(activeContextIdAtom)
-  if (!activeId) return []
-  const ctx = MutableHashMap.get(contexts, activeId)
-  return ctx._tag === "Some" ? ctx.value.bindings : []
+function getAllBindings(): ReadonlyArray<HotkeyBinding> {
+  const result: HotkeyBinding[] = []
+  MutableHashMap.forEach(contexts, (ctx) => {
+    for (const b of ctx.bindings) result.push(b)
+  })
+  return result
 }
 
 // -- Registration functions --
 
 export function registerHotkeyContext(context: HotkeyContext): void {
   MutableHashMap.set(contexts, context.id, context)
-  // Auto-focus the registered context
-  syncSet(activeContextIdAtom, context.id)
+  hkLog.withContext({ contextId: context.id, bindingCount: context.bindings.length }).info("registerHotkeyContext")
 }
 
 export function unregisterHotkeyContext(contextId: string): void {
   MutableHashMap.remove(contexts, contextId)
-  const activeId = syncGet(activeContextIdAtom)
-  if (activeId === contextId) {
-    syncSet(activeContextIdAtom, null)
-  }
+  hkLog.withContext({ contextId }).info("unregisterHotkeyContext")
+}
+
+export function focusHotkeyContext(contextId: string): void {
+  syncSet(activeContextIdAtom, contextId)
 }
 
 // -- Global keydown listener (starts on module load) --
 
+hkLog.info("installing global keydown listener")
+
 window.addEventListener("keydown", (e) => {
   const key = parseKey(e)
-  const bindings = getActiveBindings()
+  const bindings = getAllBindings()
   const binding = bindings.find((b) => b.key === key)
+  hkLog.withContext({ key, bindingCount: bindings.length, matched: !!binding }).debug("keydown")
   if (binding) {
     e.preventDefault()
     binding.handler()

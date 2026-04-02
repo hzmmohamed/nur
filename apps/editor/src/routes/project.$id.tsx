@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
 import { useRef, useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
-import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
+import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import Konva from "konva"
 import { projectsAtom } from "../hooks/use-project-index"
 import {
@@ -24,10 +24,8 @@ import {
   setActivePathIdAtom,
 } from "../lib/path-atoms"
 import { PathsOverlay } from "../lib/canvas-objects/paths-overlay"
-import {
-  registerHotkeyContext,
-  unregisterHotkeyContext,
-} from "../actors/hotkey-manager"
+import { appRegistry } from "../lib/atom-registry"
+import { registerHotkeyContext } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
 import { createModuleLogger } from "../lib/logger"
 
@@ -67,6 +65,46 @@ function ProjectEditorPage() {
   return <ProjectEditor id={id} />
 }
 
+// -- Hotkey registration (reads current values from atoms via registry) --
+
+function setupEditorHotkeys(projectId: string) {
+  registerHotkeyContext({
+    id: "editor",
+    bindings: [
+      {
+        key: "ArrowRight",
+        handler: () => {
+          const framesResult = appRegistry.get(framesAtom(projectId)) as any
+          const currentResult = appRegistry.get(currentFrameAtom(projectId)) as any
+          const frames = framesResult?._tag === "Success" ? framesResult.value : []
+          const current = currentResult?._tag === "Success" ? currentResult.value : 0
+          appRegistry.set(setCurrentFrameAtom(projectId), Math.min(current + 1, frames.length - 1))
+        },
+      },
+      {
+        key: "ArrowLeft",
+        handler: () => {
+          const currentResult = appRegistry.get(currentFrameAtom(projectId)) as any
+          const current = currentResult?._tag === "Success" ? currentResult.value : 0
+          appRegistry.set(setCurrentFrameAtom(projectId), Math.max(current - 1, 0))
+        },
+      },
+      {
+        key: "v",
+        handler: () => appRegistry.set(setActiveToolAtom(projectId), "select"),
+      },
+      {
+        key: "p",
+        handler: () => appRegistry.set(setActiveToolAtom(projectId), "pen"),
+      },
+      {
+        key: "Escape",
+        handler: () => appRegistry.set(setActivePathIdAtom(projectId), null),
+      },
+    ],
+  })
+}
+
 function ProjectEditor({ id }: { id: string }) {
   const nameResult = useAtomValue(projectNameAtom(id))
   const name = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
@@ -96,35 +134,24 @@ function ProjectEditor({ id }: { id: string }) {
   // -- Tool state --
   const toolResult = useAtomValue(activeToolAtom(id))
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
-  const setTool = useAtomSet(setActiveToolAtom(id))
 
   const pathIdResult = useAtomValue(activePathIdAtom(id))
   const activePathId = Result.isSuccess(pathIdResult) ? pathIdResult.value : null
   const setActivePathId = useAtomSet(setActivePathIdAtom(id))
 
-  // -- Lazily initialize overlay on first interaction, dispose on unmount --
+  // -- Lazily initialize overlay on first interaction --
   const getOverlay = useCallback((stage: Konva.Stage): PathsOverlay | null => {
     if (!entry) return null
     if (!overlayRef.current) {
       overlayRef.current = new PathsOverlay(stage, entry.root, {
-        onSelectPath: (pathId) => setActivePathId(pathId),
+        onSelectPath: (pathId) => appRegistry.set(setActivePathIdAtom(id), pathId),
       })
     }
     overlayRef.current.setFrame(currentFrameData?.id ?? null)
     return overlayRef.current
-  }, [entry, currentFrameData?.id, setActivePathId])
-
-  // Stable cleanup atom — keepAlive prevents re-dispose on re-renders
-  const overlayCleanupAtom = Atom.make((get) => {
-    get.addFinalizer(() => {
-      overlayRef.current?.dispose()
-      overlayRef.current = null
-    })
-  }).pipe(Atom.keepAlive)
-  useAtomMount(overlayCleanupAtom)
+  }, [entry, currentFrameData?.id, id])
 
   // Update overlay when frame changes and sync active path styling
-  // Safe to call during render — these are cheap idempotent checks on the ref
   overlayRef.current?.setFrame(currentFrameData?.id ?? null)
   overlayRef.current?.setActivePathId(activePathId)
 
@@ -166,7 +193,7 @@ function ProjectEditor({ id }: { id: string }) {
   const importProgress = useAtomValue(importProgressAtom(id))
   const isImporting = Result.isWaiting(importResult)
 
-  // Block navigation while importing — confirm dialog + abort on proceed
+  // Block navigation while importing
   useBlocker({
     shouldBlockFn: () => {
       if (!isImporting) return false
@@ -181,69 +208,42 @@ function ProjectEditor({ id }: { id: string }) {
     triggerImport({ files, projectId: id })
   }, [triggerImport, id])
 
-  // Canvas resize observer
-  const canvasResizeAtom = Atom.make((get) => {
-    const el = mainRef.current
+  // -- Imperative ResizeObservers (no atoms needed) --
+  const mainRefCallback = useCallback((el: HTMLDivElement | null) => {
+    (mainRef as any).current = el
     if (!el) return
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (entry) {
-        get.set(canvasSizeAtom, {
+        appRegistry.set(canvasSizeAtom, {
           width: Math.floor(entry.contentRect.width),
           height: Math.floor(entry.contentRect.height),
         })
       }
     })
     observer.observe(el)
-    get.addFinalizer(() => observer.disconnect())
-  })
-  useAtomMount(canvasResizeAtom)
+    return () => observer.disconnect()
+  }, [])
 
-  // Timeline width observer
-  const timelineResizeAtom = Atom.make((get) => {
-    const el = timelineRef.current
+  const timelineRefCallback = useCallback((el: HTMLDivElement | null) => {
+    (timelineRef as any).current = el
     if (!el) return
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (entry) {
-        get.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
+        appRegistry.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
       }
     })
     observer.observe(el)
-    get.addFinalizer(() => observer.disconnect())
-  })
-  useAtomMount(timelineResizeAtom)
+    return () => observer.disconnect()
+  }, [])
 
-  // Register hotkey context for arrow key navigation + tool switching
-  const hotkeyAtom = Atom.make((get) => {
-    registerHotkeyContext({
-      id: "editor",
-      bindings: [
-        {
-          key: "ArrowRight",
-          handler: () => triggerSetFrame(Math.min(currentFrame + 1, frameCount - 1)),
-        },
-        {
-          key: "ArrowLeft",
-          handler: () => triggerSetFrame(Math.max(currentFrame - 1, 0)),
-        },
-        {
-          key: "v",
-          handler: () => setTool("select"),
-        },
-        {
-          key: "p",
-          handler: () => setTool("pen"),
-        },
-        {
-          key: "Escape",
-          handler: () => setActivePathId(null),
-        },
-      ],
-    })
-    get.addFinalizer(() => unregisterHotkeyContext("editor"))
-  })
-  useAtomMount(hotkeyAtom)
+  // -- Hotkeys: register on mount, unregister on unmount --
+  const hotkeySetupRef = useRef(false)
+  if (!hotkeySetupRef.current) {
+    setupEditorHotkeys(id)
+    hotkeySetupRef.current = true
+  }
 
   return (
     <div className="h-screen flex flex-col">
@@ -263,7 +263,7 @@ function ProjectEditor({ id }: { id: string }) {
         )}
       </header>
 
-      <main ref={mainRef} className="flex-1 relative overflow-hidden">
+      <main ref={mainRefCallback} className="flex-1 relative overflow-hidden">
         {frameCount === 0 || isImporting ? (
           <FrameDropZone
             onFilesSelected={handleFilesSelected}
@@ -283,7 +283,7 @@ function ProjectEditor({ id }: { id: string }) {
         )}
       </main>
 
-      <div ref={timelineRef}>
+      <div ref={timelineRefCallback}>
         <Timeline
           frameCount={frameCount}
           currentFrame={currentFrame}
