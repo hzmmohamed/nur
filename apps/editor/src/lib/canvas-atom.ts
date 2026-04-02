@@ -116,6 +116,8 @@ export const canvasAtom = Atom.make((get) => {
   function syncPaths(frameId: string | null) {
     if (frameId !== currentFrameId) {
       disposeAllPaths()
+      // Remove any orphaned Konva objects from the paths layer
+      pathsLayer.destroyChildren()
       currentFrameId = frameId
     }
     if (!frameId) return
@@ -170,6 +172,8 @@ export const canvasAtom = Atom.make((get) => {
       subscribeToFrameImage(undefined)
       syncPaths(null)
     }
+    updateImageTransform()
+    pathsLayer.batchDraw()
   }
 
   const initialFrame = initialFrames[0]
