@@ -27,7 +27,6 @@ export class PathsOverlay {
     this.layer = new Konva.Layer()
     stage.add(this.layer)
     this.layer.moveToTop()
-    olLog.withContext({ layerCount: stage.getLayers().length }).info("PathsOverlay created")
   }
 
   /** Set which path is active — updates styling on all paths */
@@ -41,22 +40,37 @@ export class PathsOverlay {
 
   /** Switch to a new frame — dispose old paths, create new ones */
   setFrame(frameId: string | null): void {
-    if (frameId === this.currentFrameId) return
+    if (frameId === this.currentFrameId) {
+      // Frame hasn't changed but ensure layer stays on top (react-konva may reorder)
+      this.layer.moveToTop()
+      return
+    }
     this.disposeAllPaths()
     this.currentFrameId = frameId
     if (!frameId) return
     this.syncPaths()
   }
 
-  /** Re-sync paths for current frame (call after creating/deleting a path) */
+  /** Get the paths lens for the current frame */
+  private getPathsLens() {
+    if (!this.currentFrameId) return null
+    return (this.root.focus("frames").focus(this.currentFrameId) as any).focus("paths")
+  }
+
+  /** Re-sync paths for current frame */
   syncPaths(): void {
-    if (!this.currentFrameId) return
+    const pathsLens = this.getPathsLens()
+    if (!pathsLens) return
 
-    const frameLens = this.root.focus("frames").focus(this.currentFrameId)
-    const frameData = frameLens.syncGet()
-    if (!frameData) return
-
-    const pathKeys = Object.keys((frameData as any).paths ?? {})
+    const pathsRecord = pathsLens.syncGet()
+    olLog.withContext({
+      frameId: this.currentFrameId,
+      pathsRecord: pathsRecord != null ? JSON.stringify(pathsRecord).slice(0, 200) : "null/undefined",
+      pathsType: typeof pathsRecord,
+      pathsKeys: pathsRecord ? Object.keys(pathsRecord) : [],
+    }).info("syncPaths raw data")
+    const pathKeys = Object.keys(pathsRecord ?? {})
+    olLog.withContext({ frameId: this.currentFrameId, pathKeys }).info("syncPaths")
     const pathKeysSet = new Set(pathKeys)
 
     // Remove paths that no longer exist
@@ -70,7 +84,7 @@ export class PathsOverlay {
     // Add paths that are new
     for (const pathId of pathKeys) {
       if (MutableHashMap.has(this.paths, pathId)) continue
-      const pathLens = (frameLens as any).focus("paths").focus(pathId)
+      const pathLens = pathsLens.focus(pathId)
       const bp = new BezierPath(pathLens, this.layer, {
         onSelect: () => this.onSelectPath?.(pathId),
       })
@@ -80,7 +94,6 @@ export class PathsOverlay {
 
     this.layer.moveToTop()
     this.layer.batchDraw()
-    olLog.withContext({ pathCount: pathKeys.length, frameId: this.currentFrameId }).info("syncPaths done")
   }
 
   /** Get a BezierPath instance by ID */
@@ -91,19 +104,27 @@ export class PathsOverlay {
 
   /** Create a new path on the current frame, returns the path ID */
   createPath(): string | null {
-    if (!this.currentFrameId) return null
+    const pathsLens = this.getPathsLens()
+    if (!pathsLens) return null
+
     const pathId = crypto.randomUUID()
-    const frameLens = this.root.focus("frames").focus(this.currentFrameId)
-    const pathLens = (frameLens as any).focus("paths").focus(pathId)
+    const pathLens = pathsLens.focus(pathId)
     const bp = new BezierPath(pathLens, this.layer, {
       onSelect: () => this.onSelectPath?.(pathId),
     })
-    // New path is active by default, dim all others
+
     this.setActivePathId(pathId)
     bp.setActive(true)
     MutableHashMap.set(this.paths, pathId, bp)
     this.layer.moveToTop()
-    olLog.withContext({ pathId, frameId: this.currentFrameId }).info("createPath done")
+
+    // Verify: read back the paths record after creating the path
+    const verifyRecord = pathsLens.syncGet()
+    olLog.withContext({
+      pathId,
+      frameId: this.currentFrameId,
+      verifyKeys: verifyRecord ? Object.keys(verifyRecord) : [],
+    }).info("createPath done — verify")
     return pathId
   }
 

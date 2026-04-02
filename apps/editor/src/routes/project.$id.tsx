@@ -139,52 +139,42 @@ function ProjectEditor({ id }: { id: string }) {
   const activePathId = Result.isSuccess(pathIdResult) ? pathIdResult.value : null
   const setActivePathId = useAtomSet(setActivePathIdAtom(id))
 
-  // -- Lazily initialize overlay on first interaction --
-  const getOverlay = useCallback((stage: Konva.Stage): PathsOverlay | null => {
-    if (!entry) return null
-    if (!overlayRef.current) {
-      overlayRef.current = new PathsOverlay(stage, entry.root, {
-        onSelectPath: (pathId) => appRegistry.set(setActivePathIdAtom(id), pathId),
-      })
-    }
+  // -- Create overlay eagerly when stage is ready --
+  const handleStageReady = useCallback((stage: Konva.Stage) => {
+    penLog.withContext({ hasOverlay: !!overlayRef.current, hasEntry: !!entry, frameId: currentFrameData?.id }).info("handleStageReady")
+    if (overlayRef.current || !entry) return
+    overlayRef.current = new PathsOverlay(stage, entry.root, {
+      onSelectPath: (pathId) => appRegistry.set(setActivePathIdAtom(id), pathId),
+    })
     overlayRef.current.setFrame(currentFrameData?.id ?? null)
-    return overlayRef.current
   }, [entry, currentFrameData?.id, id])
 
   // Update overlay when frame changes and sync active path styling
+  penLog.withContext({ hasOverlay: !!overlayRef.current, frameId: currentFrameData?.id }).debug("render-time setFrame")
   overlayRef.current?.setFrame(currentFrameData?.id ?? null)
   overlayRef.current?.setActivePathId(activePathId)
 
   // -- Stage click handler for pen tool --
   const handleStageClick = useCallback((stage: Konva.Stage) => {
-    penLog.withContext({ activeTool, hasEntry: !!entry, activePathId }).info("handleStageClick called")
-    if (activeTool !== "pen") {
-      penLog.withContext({ activeTool }).debug("activeTool is not pen, returning")
-      return
-    }
-    const pos = stage.getPointerPosition()
-    penLog.withContext({ pos: pos ? `${pos.x},${pos.y}` : "null" }).debug("pointer position")
-    if (!pos) return
+    const overlay = overlayRef.current
+    penLog.withContext({ activeTool, hasOverlay: !!overlay, activePathId }).info("handleStageClick called")
+    if (activeTool !== "pen") return
 
-    const overlay = getOverlay(stage)
-    penLog.withContext({ hasOverlay: !!overlay, currentFrameId: currentFrameData?.id }).debug("overlay check")
-    if (!overlay) return
+    const pos = stage.getPointerPosition()
+    if (!pos || !overlay) return
 
     let pathId = activePathId
     if (!pathId) {
       pathId = overlay.createPath()
-      penLog.withContext({ pathId }).info("created new path")
       if (!pathId) return
       setActivePathId(pathId)
     }
 
     const bp = overlay.getPath(pathId)
-    penLog.withContext({ pathId, hasBP: !!bp }).debug("getPath result")
     if (bp) {
       bp.appendPoint(pos.x, pos.y)
-      penLog.withContext({ x: pos.x, y: pos.y, pathId }).info("appended point")
     }
-  }, [activeTool, activePathId, setActivePathId, getOverlay, entry, currentFrameData?.id])
+  }, [activeTool, activePathId, setActivePathId])
 
   // Import atoms
   const importFn = importFnAtom(id)
@@ -279,6 +269,7 @@ function ProjectEditor({ id }: { id: string }) {
             frameWidth={currentFrameData?.width ?? 1}
             frameHeight={currentFrameData?.height ?? 1}
             onStageClick={handleStageClick}
+            onStageReady={handleStageReady}
           />
         )}
       </main>
