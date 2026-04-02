@@ -120,42 +120,68 @@ export const canvasAtom = Atom.make((get) => {
     MutableHashMap.clear(paths)
   }
 
+  function getActiveLayerId(): string | null {
+    const result = appRegistry.get(activeLayerIdAtom) as any
+    return result?._tag === "Success" ? result.value : null
+  }
+
   function syncPaths(frameId: string | null) {
     if (frameId !== currentFrameId) {
       disposeAllPaths()
-      // Remove any orphaned Konva objects from the paths layer
       pathsLayer.destroyChildren()
       currentFrameId = frameId
     }
     if (!frameId) return
 
-    const pathsLens = (root.focus("frames").focus(frameId) as any).focus("paths")
-    const pathsRecord = pathsLens.syncGet() ?? {}
-    const pathKeys = Object.keys(pathsRecord)
-    const pathKeysSet = new Set(pathKeys)
-
-    log.withContext({ frameId, pathKeys, existing: MutableHashMap.size(paths) }).info("syncPaths")
-
-    MutableHashMap.forEach(paths, (bp, id) => {
-      if (!pathKeysSet.has(id)) {
-        bp.dispose()
-        MutableHashMap.remove(paths, id)
-      }
-    })
-
-    const activePathId = getActivePathId()
-    for (const pathId of pathKeys) {
-      if (MutableHashMap.has(paths, pathId)) continue
-      const pathLens = pathsLens.focus(pathId)
-      const bp = new BezierPath(pathLens, pathsLayer, {
-        onSelect: () => appRegistry.set(setActivePathIdAtom, pathId),
-      })
-      bp.setActive(pathId === activePathId)
-      MutableHashMap.set(paths, pathId, bp)
+    // Read masks from the active layer for this frame
+    const activeLayerId = getActiveLayerId()
+    if (!activeLayerId) {
+      // Preview mode — show all layers' masks (dimmed)
+      syncAllLayerPaths(frameId)
+    } else {
+      // Edit mode — show only active layer's masks
+      syncLayerPaths(activeLayerId, frameId)
     }
 
     pathsLayer.moveToTop()
     pathsLayer.batchDraw()
+  }
+
+  function syncAllLayerPaths(frameId: string) {
+    disposeAllPaths()
+    pathsLayer.destroyChildren()
+
+    const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
+    for (const [layerId, _layer] of Object.entries(layersRecord)) {
+      const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
+      const maskData = masksLens.syncGet()
+      if (!maskData) continue
+
+      // Create a single BezierPath for this layer's mask on this frame
+      const pathKey = `${layerId}:${frameId}`
+      const bp = new BezierPath(masksLens, pathsLayer, {
+        onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
+      })
+      bp.setActive(false)
+      MutableHashMap.set(paths, pathKey, bp)
+    }
+  }
+
+  function syncLayerPaths(layerId: string, frameId: string) {
+    disposeAllPaths()
+    pathsLayer.destroyChildren()
+
+    const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
+    const maskData = masksLens.syncGet()
+    if (!maskData) return
+
+    const pathKey = `${layerId}:${frameId}`
+    const activePathId = getActivePathId()
+    const bp = new BezierPath(masksLens, pathsLayer, {
+      onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
+    })
+    bp.setActive(pathKey === activePathId)
+    MutableHashMap.set(paths, pathKey, bp)
   }
 
   function getActivePathId(): string | null {
@@ -214,13 +240,11 @@ export const canvasAtom = Atom.make((get) => {
     })
   })
 
-  // -- React to active layer changes (dim paths when in edit mode) --
-  get.subscribe(activeLayerIdAtom, (layerIdResult) => {
-    const activeLayerId = layerIdResult._tag === "Success" ? layerIdResult.value : null
-    // In edit mode (layer selected), dim the paths layer slightly
-    // Future: only show paths belonging to the active layer at full opacity
-    pathsLayer.opacity(activeLayerId ? 0.4 : 1)
-    pathsLayer.batchDraw()
+  // -- React to active layer changes — re-sync paths for current frame --
+  get.subscribe(activeLayerIdAtom, () => {
+    if (currentFrameId) {
+      syncPaths(currentFrameId)
+    }
   })
 
   // -- Stage pointer handlers for pen tool --
@@ -228,25 +252,27 @@ export const canvasAtom = Atom.make((get) => {
     const tool = getActiveTool()
     if (tool !== "pen") return
 
+    const activeLayerId = getActiveLayerId()
+    if (!activeLayerId || !currentFrameId) return
+
     const pos = stage.getPointerPosition()
     if (!pos) return
 
-    let pathId = getActivePathId()
-    if (!pathId) {
-      if (!currentFrameId) return
-      const pathsLens = (root.focus("frames").focus(currentFrameId) as any).focus("paths")
-      pathId = crypto.randomUUID()
-      const pathLens = pathsLens.focus(pathId)
-      const bp = new BezierPath(pathLens, pathsLayer, {
-        onSelect: () => appRegistry.set(setActivePathIdAtom, pathId!),
+    const pathKey = `${activeLayerId}:${currentFrameId}`
+    const masksLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId)
+
+    // If no BezierPath exists for this layer+frame, create one
+    if (!MutableHashMap.has(paths, pathKey)) {
+      const bp = new BezierPath(masksLens, pathsLayer, {
+        onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
       })
       bp.setActive(true)
-      MutableHashMap.set(paths, pathId, bp)
-      appRegistry.set(setActivePathIdAtom, pathId)
+      MutableHashMap.set(paths, pathKey, bp)
+      appRegistry.set(setActivePathIdAtom, pathKey)
       pathsLayer.moveToTop()
     }
 
-    const bp = MutableHashMap.get(paths, pathId)
+    const bp = MutableHashMap.get(paths, pathKey)
     if (bp._tag === "Some") {
       const id = bp.value.appendPoint(pos.x, pos.y)
       dragOrigin = { x: pos.x, y: pos.y }
@@ -268,12 +294,11 @@ export const canvasAtom = Atom.make((get) => {
     if (!isDraggingNewHandle && dist < DRAG_THRESHOLD) return
     isDraggingNewHandle = true
 
-    const pathId = getActivePathId()
-    if (!pathId || !currentFrameId) return
+    const activeLayerId = getActiveLayerId()
+    if (!activeLayerId || !currentFrameId) return
 
-    const pathsLens = (root.focus("frames").focus(currentFrameId) as any).focus("paths")
-    const pathLens = pathsLens.focus(pathId)
-    const nodeLens = pathLens.find(newPointId)
+    const masksLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId)
+    const nodeLens = masksLens.find(newPointId)
 
     // handleOut points from origin toward cursor
     const angle = Math.atan2(dy, dx)

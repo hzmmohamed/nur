@@ -1,6 +1,5 @@
 import * as S from "effect/Schema"
 import { FrameId } from "./ids"
-import { YLinkedList } from "effect-yjs"
 
 export const ContentHash = S.Trimmed.pipe(S.minLength(1), S.brand("ContentHash"))
 export type ContentHash = S.Schema.Type<typeof ContentHash>
@@ -22,7 +21,6 @@ export const FrameSchema = S.Struct({
   contentHash: ContentHash,
   width: S.Number.pipe(S.int(), S.positive()),
   height: S.Number.pipe(S.int(), S.positive()),
-  paths: S.Record({ key: S.String, value: YLinkedList(BezierPointSchema) }),
 })
 
 export type Frame = S.Schema.Type<typeof FrameSchema>

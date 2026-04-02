@@ -41,7 +41,6 @@ export const importFrames = (params: {
           contentHash: contentHash as Frame["contentHash"],
           width: file.width,
           height: file.height,
-          paths: {},
         }
         projectRoot.focus("frames").focus(id).syncSet(frame)
         return frame

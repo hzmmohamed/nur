@@ -11,6 +11,8 @@ describe("currentFrameIndex atom", () => {
     awareness.local.syncSet({
       currentFrame: 0,
       activeTool: "select",
+      activePathId: null,
+      activeLayerId: null,
       selection: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     })
@@ -25,6 +27,8 @@ describe("currentFrameIndex atom", () => {
     awareness.local.syncSet({
       currentFrame: 0,
       activeTool: "select",
+      activePathId: null,
+      activeLayerId: null,
       selection: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     })

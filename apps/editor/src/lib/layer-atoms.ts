@@ -87,6 +87,8 @@ export const createLayerAtom = projectDocRuntime.fn(
       name,
       color,
       index: count,
+      groupId: null,
+      masks: {},
     })
 
     // Auto-select the new layer
