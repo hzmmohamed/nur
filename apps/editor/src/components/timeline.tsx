@@ -132,21 +132,31 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
     )
   }
 
+  const handleZoomReset = useCallback(() => {
+    appRegistry.set(zoomLevelAtom, 1)
+  }, [])
+
+  const handleZoomSlider = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    appRegistry.set(zoomLevelAtom, parseFloat(e.target.value))
+  }, [])
+
   return (
-    <div className="flex h-full bg-background">
-      {/* Left: layer labels */}
-      <div
-        ref={labelRef}
-        className="flex-shrink-0 overflow-hidden border-r border-border"
-        style={{ width: LABEL_W }}
-      >
-        {/* Header spacer */}
+    <div className="flex flex-col h-full bg-background">
+      {/* Main area: labels + grid */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left: layer labels */}
         <div
-          className="flex items-center px-2 border-b border-border text-xs text-muted-foreground font-semibold"
-          style={{ height: HEADER_H }}
+          ref={labelRef}
+          className="flex-shrink-0 overflow-hidden border-r border-border"
+          style={{ width: LABEL_W }}
         >
-          Layers
-        </div>
+          {/* Header spacer */}
+          <div
+            className="flex items-center px-2 border-b border-border text-xs text-muted-foreground font-semibold"
+            style={{ height: HEADER_H }}
+          >
+            Layers
+          </div>
 
         {/* Layer rows */}
         <div className="overflow-y-hidden" style={{ height: `calc(100% - ${HEADER_H}px)` }}>
@@ -293,6 +303,34 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
           )}
         </svg>
       </div>
+      </div>
+
+      {/* Zoom bar */}
+      {frameCount > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1 border-t border-border text-xs text-muted-foreground flex-shrink-0">
+          <button
+            onClick={handleZoomReset}
+            className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+            aria-label="Reset zoom"
+            title="Reset zoom"
+          >
+            <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+            </svg>
+          </button>
+          <input
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.1"
+            value={zoomLevel}
+            onChange={handleZoomSlider}
+            className="w-20 h-1 accent-muted-foreground cursor-pointer"
+            aria-label="Timeline zoom"
+          />
+          <span className="w-8 text-right tabular-nums">{Math.round(zoomLevel * 100)}%</span>
+        </div>
+      )}
     </div>
   )
 }
