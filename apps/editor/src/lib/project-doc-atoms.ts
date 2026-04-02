@@ -1,6 +1,6 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { createProjectDoc, createCurrentFrameIndex, ProjectId, type Frame } from "@nur/core"
-import { YAwareness } from "effect-yjs"
+import { createProjectDoc, createCurrentFrameIndex, ProjectId, type Frame, type AwarenessState } from "@nur/core"
+import { YAwareness, type YAwarenessHandle } from "effect-yjs"
 import { AwarenessSchema } from "@nur/core"
 import * as S from "effect/Schema"
 import * as Effect from "effect/Effect"
@@ -12,11 +12,12 @@ const parseProjectId = S.decodeSync(ProjectId)
 
 // -- Types --
 
-interface ProjectDocEntry {
+export interface ProjectDocEntry {
   readonly root: ReturnType<typeof createProjectDoc>["root"]
   readonly doc: ReturnType<typeof createProjectDoc>["doc"]
   readonly persistence: ReturnType<typeof createProjectDoc>["persistence"]
-  readonly awareness: ReturnType<typeof createCurrentFrameIndex>
+  readonly awareness: YAwarenessHandle<AwarenessState>
+  readonly currentFrameIndex: ReturnType<typeof createCurrentFrameIndex>
 }
 
 // -- Shared runtime --
@@ -42,8 +43,8 @@ const projectDocCacheAtom = projectDocRuntime.atom(
             selection: [],
             viewport: { x: 0, y: 0, zoom: 1 },
           })
-          const frameIndex = createCurrentFrameIndex(awareness)
-          return { root, doc, persistence, awareness: frameIndex } satisfies ProjectDocEntry
+          const currentFrameIndex = createCurrentFrameIndex(awareness)
+          return { root, doc, persistence, awareness, currentFrameIndex } satisfies ProjectDocEntry
         }),
     })
   }),
@@ -75,7 +76,7 @@ export const flushProjectDoc = (projectId: string) =>
 
 // -- Shared entry atom per project (single cache lookup, shared across all derived atoms) --
 
-const projectDocEntryAtom = Atom.family((projectId: string) =>
+export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result<ProjectDocEntry>> = Atom.family((projectId: string) =>
   projectDocRuntime.atom(getProjectDoc(projectId)),
 )
 
@@ -120,8 +121,8 @@ export const currentFrameAtom = Atom.family((projectId: string) => {
   return Atom.make((get) => {
     const result = get(entryAtom)
     if (!Result.isSuccess(result)) return result
-    // awareness.atom is already a stable reference, no need to cache
-    return Result.success(get(result.value.awareness.atom) as number ?? 0)
+    // currentFrameIndex.atom is already a stable reference, no need to cache
+    return Result.success(get(result.value.currentFrameIndex.atom) as number ?? 0)
   })
 })
 
@@ -131,7 +132,7 @@ export const setCurrentFrameAtom = Atom.family((projectId: string) =>
     Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
       const cache = yield* get.result(projectDocCacheAtom)
       const entry = yield* cache.get(projectId)
-      entry.awareness.set(index)
+      entry.currentFrameIndex.set(index)
     }),
   ),
 )
