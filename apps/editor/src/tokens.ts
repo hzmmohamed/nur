@@ -177,6 +177,8 @@ export const tokens = {
   canvas: {
     pointRadius: 6,
     handleRadius: 4,
+    pointStrokeWidth: 1,
+    guideStrokeWidth: 1,
     pathWidth: 2,
     pathWidthInactive: 1,
     hitTolerance: 10,
@@ -190,5 +192,9 @@ export const tokens = {
     cellBaseWidth: 24,
     height: 64,
     headerHeight: 20,
+    labelFontSize: 10,
+    labelOffsetY: 4,
+    markerWidth: 1,
+    playheadWidth: 2,
   },
 } as const

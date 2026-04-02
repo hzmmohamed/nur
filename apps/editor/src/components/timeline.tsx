@@ -62,20 +62,20 @@ function renderFrameCells(
 
     cells.push(
       <Line key={`border-${i}`} points={[x, HEADER_HEIGHT, x, TIMELINE_HEIGHT]}
-        stroke={tokens.color.timeline.grid} strokeWidth={1} />
+        stroke={tokens.color.timeline.grid} strokeWidth={tokens.timeline.markerWidth} />
     )
 
     if ((i + 1) % labelInterval === 0 || i === 0) {
       cells.push(
-        <Text key={`label-${i}`} x={x} y={4} width={cellWidth}
-          text={`${i + 1}`} fontSize={10} fill={tokens.color.timeline.label} align="center" />
+        <Text key={`label-${i}`} x={x} y={tokens.timeline.labelOffsetY} width={cellWidth}
+          text={`${i + 1}`} fontSize={tokens.timeline.labelFontSize} fill={tokens.color.timeline.label} align="center" />
       )
     }
 
     if (i > 0 && i % 10 === 0) {
       cells.push(
         <Rect key={`marker-${i}`} x={x} y={HEADER_HEIGHT}
-          width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill={tokens.color.timeline.tick} />
+          width={tokens.timeline.markerWidth} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill={tokens.color.timeline.tick} />
       )
     }
   }
@@ -83,7 +83,7 @@ function renderFrameCells(
   if (currentFrame >= 0 && currentFrame < frameCount) {
     cells.push(
       <Rect key="playhead" x={currentFrame * cellWidth} y={0}
-        width={2} height={TIMELINE_HEIGHT} fill={tokens.color.timeline.playhead} />
+        width={tokens.timeline.playheadWidth} height={TIMELINE_HEIGHT} fill={tokens.color.timeline.playhead} />
     )
   }
 

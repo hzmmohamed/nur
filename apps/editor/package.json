@@ -18,7 +18,6 @@
     "@effect/platform": "^0.96.0",
     "@effect/platform-browser": "^0.76.0",
     "@nur/core": "workspace:*",
-    "@nur/design-system": "workspace:*",
     "@nur/object-store": "workspace:*",
     "@nur/pen-tool": "workspace:*",
     "@nur/renderer": "workspace:*",

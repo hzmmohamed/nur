@@ -59,7 +59,16 @@ function ProjectListPage() {
             <Card
               key={project.id}
               className="cursor-pointer hover:bg-accent/50 transition-colors"
+              role="button"
+              tabIndex={0}
+              aria-label={`Open project ${project.name}`}
               onClick={() => navigate({ to: "/project/$id", params: { id: project.id } })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  navigate({ to: "/project/$id", params: { id: project.id } })
+                }
+              }}
             >
               <CardContent className="p-3">
                 <div className="flex justify-between items-center">

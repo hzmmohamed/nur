@@ -215,7 +215,7 @@ export class BezierPath {
     const handleInLine = new Konva.Line({
       points: [0, 0, 0, 0],
       stroke: HANDLE_LINE_COLOR,
-      strokeWidth: 1,
+      strokeWidth: tokens.canvas.guideStrokeWidth,
       visible: false,
     })
 
@@ -232,7 +232,7 @@ export class BezierPath {
     const handleOutLine = new Konva.Line({
       points: [0, 0, 0, 0],
       stroke: HANDLE_LINE_COLOR,
-      strokeWidth: 1,
+      strokeWidth: tokens.canvas.guideStrokeWidth,
       visible: false,
     })
 
@@ -250,7 +250,7 @@ export class BezierPath {
       radius: POINT_RADIUS,
       fill: POINT_COLOR,
       stroke: tokens.color.canvas.vertexStroke,
-      strokeWidth: 1,
+      strokeWidth: tokens.canvas.pointStrokeWidth,
       draggable: true,
       hitStrokeWidth: POINT_HIT_BUFFER,
     })

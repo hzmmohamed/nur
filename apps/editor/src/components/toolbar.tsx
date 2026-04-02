@@ -9,12 +9,14 @@ export function Toolbar() {
   const setTool = useAtomSet(setActiveToolAtom)
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" role="toolbar" aria-label="Drawing tools">
       <Button
         variant={activeTool === "select" ? "default" : "ghost"}
         size="sm"
         onClick={() => setTool("select")}
         title="Select (V)"
+        aria-label="Select tool (V)"
+        aria-pressed={activeTool === "select"}
       >
         <CursorIcon className="h-4 w-4" />
       </Button>
@@ -23,6 +25,8 @@ export function Toolbar() {
         size="sm"
         onClick={() => setTool("pen")}
         title="Pen (P)"
+        aria-label="Pen tool (P)"
+        aria-pressed={activeTool === "pen"}
       >
         <PenIcon className="h-4 w-4" />
       </Button>
@@ -32,7 +36,7 @@ export function Toolbar() {
 
 function CursorIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
     </svg>
   )
@@ -40,7 +44,7 @@ function CursorIcon({ className }: { className?: string }) {
 
 function PenIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M12 19l7-7 3 3-7 7-3-3z" />
       <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
       <path d="M2 2l7.586 7.586" />

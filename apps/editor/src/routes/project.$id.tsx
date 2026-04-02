@@ -19,6 +19,7 @@ import { canvasContainerAtom, canvasAtom } from "../lib/canvas-atom"
 import { appRegistry } from "../lib/atom-registry"
 import { registerHotkeyContext } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   setActiveToolAtom,
   setActivePathIdAtom,
@@ -95,7 +96,7 @@ function ProjectEditorPage() {
   if (!Result.isSuccess(entryResult)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     )
   }
