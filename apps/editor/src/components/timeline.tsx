@@ -3,6 +3,7 @@ import { Atom } from "@effect-atom/atom"
 import { useAtom } from "@effect-atom/atom-react/Hooks"
 import { appRegistry } from "../lib/atom-registry"
 import { Stage, Layer, Rect, Text, Line } from "react-konva"
+import { tokens } from "@/tokens"
 
 interface TimelineProps {
   frameCount: number
@@ -11,9 +12,9 @@ interface TimelineProps {
   width: number
 }
 
-const FRAME_CELL_BASE_WIDTH = 24
-const TIMELINE_HEIGHT = 64
-const HEADER_HEIGHT = 20
+const FRAME_CELL_BASE_WIDTH = tokens.timeline.cellBaseWidth
+const TIMELINE_HEIGHT = tokens.timeline.height
+const HEADER_HEIGHT = tokens.timeline.headerHeight
 
 const zoomLevelAtom = Atom.make(1)
 const isScrubbingAtom = Atom.make(false)
@@ -55,26 +56,26 @@ function renderFrameCells(
     if (isActive) {
       cells.push(
         <Rect key={`bg-${i}`} x={x} y={HEADER_HEIGHT} width={cellWidth}
-          height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="rgba(59, 130, 246, 0.3)" />
+          height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill={tokens.color.timeline.activeBg} />
       )
     }
 
     cells.push(
       <Line key={`border-${i}`} points={[x, HEADER_HEIGHT, x, TIMELINE_HEIGHT]}
-        stroke="#3f3f46" strokeWidth={1} />
+        stroke={tokens.color.timeline.grid} strokeWidth={1} />
     )
 
     if ((i + 1) % labelInterval === 0 || i === 0) {
       cells.push(
         <Text key={`label-${i}`} x={x} y={4} width={cellWidth}
-          text={`${i + 1}`} fontSize={10} fill="#a1a1aa" align="center" />
+          text={`${i + 1}`} fontSize={10} fill={tokens.color.timeline.label} align="center" />
       )
     }
 
     if (i > 0 && i % 10 === 0) {
       cells.push(
         <Rect key={`marker-${i}`} x={x} y={HEADER_HEIGHT}
-          width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="#71717a" />
+          width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill={tokens.color.timeline.tick} />
       )
     }
   }
@@ -82,7 +83,7 @@ function renderFrameCells(
   if (currentFrame >= 0 && currentFrame < frameCount) {
     cells.push(
       <Rect key="playhead" x={currentFrame * cellWidth} y={0}
-        width={2} height={TIMELINE_HEIGHT} fill="#3b82f6" />
+        width={2} height={TIMELINE_HEIGHT} fill={tokens.color.timeline.playhead} />
     )
   }
 
@@ -161,7 +162,7 @@ export function Timeline(props: TimelineProps) {
     >
       <Stage width={totalWidth} height={TIMELINE_HEIGHT}>
         <Layer>
-          <Rect x={0} y={0} width={totalWidth} height={TIMELINE_HEIGHT} fill="#18181b" />
+          <Rect x={0} y={0} width={totalWidth} height={TIMELINE_HEIGHT} fill={tokens.color.timeline.bg} />
           {frameCells}
         </Layer>
       </Stage>

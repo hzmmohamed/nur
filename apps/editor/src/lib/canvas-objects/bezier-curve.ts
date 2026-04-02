@@ -7,23 +7,24 @@ import { cartesianToPolar, polarToCartesian } from "@/lib/domain/coordinate-util
 import { buildSvgPathData, findNearestPointOnPath } from "./bezier-math"
 import type { BezierPointData } from "./path"
 import { createModuleLogger } from "../logger"
+import { tokens } from "@/tokens"
 
 const bpLog = createModuleLogger("bezier-path")
 
-const POINT_RADIUS = 6
-const HANDLE_RADIUS = 4
-const POINT_COLOR = "#4A90D9"
-const HANDLE_COLOR = "#E87D3E"
-const PATH_COLOR = "#FFFFFF"
-const PATH_COLOR_INACTIVE = "#888888"
-const PATH_WIDTH = 2
-const PATH_WIDTH_INACTIVE = 1
-const HANDLE_LINE_COLOR = "#666666"
-const HIT_TOLERANCE = 10
-const POINT_COLOR_HOVER = "#6BB0F0"
-const HANDLE_COLOR_HOVER = "#F0A060"
-const POINT_HIT_BUFFER = 6
-const HANDLE_HIT_BUFFER = 6
+const POINT_RADIUS = tokens.canvas.pointRadius
+const HANDLE_RADIUS = tokens.canvas.handleRadius
+const POINT_COLOR = tokens.color.canvas.vertex
+const HANDLE_COLOR = tokens.color.canvas.handle
+const PATH_COLOR = tokens.color.canvas.edge
+const PATH_COLOR_INACTIVE = tokens.color.canvas.edgeInactive
+const PATH_WIDTH = tokens.canvas.pathWidth
+const PATH_WIDTH_INACTIVE = tokens.canvas.pathWidthInactive
+const HANDLE_LINE_COLOR = tokens.color.canvas.edgeGuide
+const HIT_TOLERANCE = tokens.canvas.hitTolerance
+const POINT_COLOR_HOVER = tokens.color.canvas.vertexHover
+const HANDLE_COLOR_HOVER = tokens.color.canvas.handleHover
+const POINT_HIT_BUFFER = tokens.canvas.pointHitBuffer
+const HANDLE_HIT_BUFFER = tokens.canvas.handleHitBuffer
 
 interface PointObjects {
   group: Konva.Group
@@ -73,7 +74,7 @@ export class BezierPath {
     this.ghostVertex = new Konva.Circle({
       radius: POINT_RADIUS,
       fill: POINT_COLOR,
-      opacity: 0.4,
+      opacity: tokens.canvas.ghostOpacity,
       visible: false,
       listening: false,
     })
@@ -248,7 +249,7 @@ export class BezierPath {
     const pointCircle = new Konva.Circle({
       radius: POINT_RADIUS,
       fill: POINT_COLOR,
-      stroke: "#FFFFFF",
+      stroke: tokens.color.canvas.vertexStroke,
       strokeWidth: 1,
       draggable: true,
       hitStrokeWidth: POINT_HIT_BUFFER,
