@@ -94,6 +94,7 @@ export const importFnAtom = Atom.family((projectId: string) =>
           contentHash: contentHash as Frame["contentHash"],
           width: dims.width,
           height: dims.height,
+          paths: {},
         }
         entry.root.focus("frames").focus(id).syncSet(frame)
         frames.push(frame)
