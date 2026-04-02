@@ -3,10 +3,10 @@ import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { activeToolAtom, setActiveToolAtom } from "../lib/path-atoms"
 import { Button } from "@/components/ui/button"
 
-export function Toolbar({ projectId }: { projectId: string }) {
-  const toolResult = useAtomValue(activeToolAtom(projectId))
+export function Toolbar() {
+  const toolResult = useAtomValue(activeToolAtom)
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
-  const setTool = useAtomSet(setActiveToolAtom(projectId))
+  const setTool = useAtomSet(setActiveToolAtom)
 
   return (
     <div className="flex items-center gap-1">

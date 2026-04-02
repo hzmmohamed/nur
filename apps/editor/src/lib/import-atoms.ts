@@ -6,9 +6,9 @@ import { FrameId } from "@nur/core"
 import * as S from "effect/Schema"
 import { AppBlobStore } from "./blob-store-layer"
 import { appRegistry } from "./atom-registry"
-import { projectDocEntryAtom } from "./project-doc-atoms"
+import { activeEntryAtom } from "./project-doc-atoms"
 
-// -- Helpers (moved from project.$id.tsx) --
+// -- Helpers --
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -43,65 +43,54 @@ export interface ImportProgress {
   readonly currentFile: string
 }
 
-export interface ImportArgs {
-  readonly files: FileList
-  readonly projectId: string
-}
-
-// -- Atoms --
+// -- Atoms (scoped to active project) --
 
 const makeFrameId = S.decodeSync(FrameId)
 
 const storageRuntime = Atom.runtime(AppBlobStore)
 
-export const importProgressAtom = Atom.family((_projectId: string) =>
-  Atom.make<ImportProgress>({ total: 0, completed: 0, currentFile: "" }),
-)
+export const importProgressAtom = Atom.make<ImportProgress>({ total: 0, completed: 0, currentFile: "" })
 
-export const importFnAtom = Atom.family((projectId: string) =>
-  storageRuntime.fn(
-    Effect.fnUntraced(function* (args: ImportArgs, get: Atom.FnContext) {
-      const entry = yield* get.result(projectDocEntryAtom(args.projectId))
-      const { files } = args
-      const framesRecord = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
-      const startIndex = Object.keys(framesRecord).length
-      const store = yield* BlobStore
+export const importFnAtom = storageRuntime.fn(
+  Effect.fnUntraced(function* (files: FileList, get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    const framesRecord = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
+    const startIndex = Object.keys(framesRecord).length
+    const store = yield* BlobStore
 
-      const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"))
-      if (imageFiles.length === 0) return []
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"))
+    if (imageFiles.length === 0) return []
 
-      const sorted = sortFramesByName(imageFiles)
-      const progressAtom = importProgressAtom(projectId)
-      appRegistry.set(progressAtom, { total: sorted.length, completed: 0, currentFile: "" })
+    const sorted = sortFramesByName(imageFiles)
+    appRegistry.set(importProgressAtom, { total: sorted.length, completed: 0, currentFile: "" })
 
-      const frames: Array<Frame> = []
+    const frames: Array<Frame> = []
 
-      for (let i = 0; i < sorted.length; i++) {
-        const file = sorted[i]
-        appRegistry.set(progressAtom, { total: sorted.length, completed: i, currentFile: file.name })
+    for (let i = 0; i < sorted.length; i++) {
+      const file = sorted[i]
+      appRegistry.set(importProgressAtom, { total: sorted.length, completed: i, currentFile: file.name })
 
-        const [buffer, dims] = yield* Effect.promise(() =>
-          Promise.all([readFileAsArrayBuffer(file), getImageDimensions(file)]),
-        )
+      const [buffer, dims] = yield* Effect.promise(() =>
+        Promise.all([readFileAsArrayBuffer(file), getImageDimensions(file)]),
+      )
 
-        const data = new Uint8Array(buffer)
-        const contentHash = yield* store.put(data)
-        const id = makeFrameId(crypto.randomUUID())
-        const frame: Frame = {
-          id,
-          index: startIndex + i,
-          contentHash: contentHash as Frame["contentHash"],
-          width: dims.width,
-          height: dims.height,
-          paths: {},
-        }
-        entry.root.focus("frames").focus(id).syncSet(frame)
-        frames.push(frame)
+      const data = new Uint8Array(buffer)
+      const contentHash = yield* store.put(data)
+      const id = makeFrameId(crypto.randomUUID())
+      const frame: Frame = {
+        id,
+        index: startIndex + i,
+        contentHash: contentHash as Frame["contentHash"],
+        width: dims.width,
+        height: dims.height,
+        paths: {},
       }
+      entry.root.focus("frames").focus(id).syncSet(frame)
+      frames.push(frame)
+    }
 
-      appRegistry.set(progressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
-      yield* Effect.promise(() => entry.persistence.flush())
-      return frames
-    }),
-  ),
+    appRegistry.set(importProgressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
+    yield* Effect.promise(() => entry.persistence.flush())
+    return frames
+  }),
 )

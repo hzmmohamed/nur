@@ -24,6 +24,10 @@ export interface ProjectDocEntry {
 
 export const projectDocRuntime = Atom.runtime(Layer.empty)
 
+// -- Active project --
+
+export const activeProjectIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
+
 // -- Project doc entry: one per project, includes persistence sync --
 
 export const projectDocEntryAtom = Atom.family((projectId: string) =>
@@ -55,35 +59,44 @@ export const projectDocEntryAtom = Atom.family((projectId: string) =>
   ).pipe(Atom.keepAlive),
 )
 
-// -- Effect-returning helpers --
+// -- Active project entry (reads activeProjectIdAtom) --
 
-/** Flush Y.Doc state to IndexedDB. */
-export const flushProjectDoc = (projectId: string) =>
-  Effect.fnUntraced(function* (get: Atom.Context) {
-    const entry = yield* get.result(projectDocEntryAtom(projectId))
-    yield* Effect.promise(() => entry.persistence.flush())
-  })
+export const activeEntryAtom = Atom.make((get): Result.Result<ProjectDocEntry> => {
+  const projectId = get(activeProjectIdAtom)
+  if (!projectId) return Result.initial()
+  return get(projectDocEntryAtom(projectId))
+})
 
-// -- Derived atoms --
+// -- Derived atoms (scoped to active project) --
 
 /** Project name, reactive from Y.Doc */
-export const projectNameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
+export const projectNameAtom = (() => {
   let nameAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
+  let lastProjectId: string | null = null
   return Atom.make((get) => {
-    const result = get(entryAtom)
+    const projectId = get(activeProjectIdAtom)
+    if (projectId !== lastProjectId) {
+      nameAtom = undefined
+      lastProjectId = projectId
+    }
+    const result = get(activeEntryAtom)
     if (!Result.isSuccess(result)) return result
     if (!nameAtom) nameAtom = result.value.root.focus("name").atom()
     return Result.success(get(nameAtom) as string | undefined)
   })
-})
+})()
 
 /** Frames record from Y.Doc, sorted by index */
-export const framesAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
+export const framesAtom = (() => {
   let rawAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
+  let lastProjectId: string | null = null
   return Atom.make((get) => {
-    const result = get(entryAtom)
+    const projectId = get(activeProjectIdAtom)
+    if (projectId !== lastProjectId) {
+      rawAtom = undefined
+      lastProjectId = projectId
+    }
+    const result = get(activeEntryAtom)
     if (!Result.isSuccess(result)) {
       log.withContext({ projectId, tag: result._tag }).debug("framesAtom: entry not ready")
       return result
@@ -97,24 +110,25 @@ export const framesAtom = Atom.family((projectId: string) => {
     log.withContext({ projectId, frameCount: frames.length }).debug("framesAtom: computed")
     return Result.success(frames)
   })
-})
+})()
 
 /** Current frame index, reactive from YAwareness */
-export const currentFrameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
-  return Atom.make((get) => {
-    const result = get(entryAtom)
-    if (!Result.isSuccess(result)) return result
-    return Result.success(get(result.value.currentFrameIndex.atom) as number ?? 0)
-  })
+export const currentFrameAtom = Atom.make((get) => {
+  const result = get(activeEntryAtom)
+  if (!Result.isSuccess(result)) return result
+  return Result.success(get(result.value.currentFrameIndex.atom) as number ?? 0)
 })
 
 /** Setter for current frame */
-export const setCurrentFrameAtom = Atom.family((projectId: string) =>
-  projectDocRuntime.fn(
-    Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
-      const entry = yield* get.result(projectDocEntryAtom(projectId))
-      entry.currentFrameIndex.set(index)
-    }),
-  ),
+export const setCurrentFrameAtom = projectDocRuntime.fn(
+  Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    entry.currentFrameIndex.set(index)
+  }),
 )
+
+/** Flush Y.Doc state to IndexedDB for active project */
+export const flushProjectDoc = Effect.fnUntraced(function* (get: Atom.Context) {
+  const entry = yield* get.result(activeEntryAtom)
+  yield* Effect.promise(() => entry.persistence.flush())
+})

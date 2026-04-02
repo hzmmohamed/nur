@@ -4,7 +4,8 @@ import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { projectsAtom } from "../hooks/use-project-index"
 import {
-  projectDocEntryAtom,
+  activeProjectIdAtom,
+  activeEntryAtom,
   projectNameAtom,
   framesAtom,
   currentFrameAtom,
@@ -27,56 +28,57 @@ export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
 })
 
-// -- Hotkey registration (reads current values from atoms via registry) --
+// -- Hotkey registration --
 
-function setupEditorHotkeys(projectId: string) {
+function setupEditorHotkeys() {
   registerHotkeyContext({
     id: "editor",
     bindings: [
       {
         key: "ArrowRight",
         handler: () => {
-          const framesResult = appRegistry.get(framesAtom(projectId)) as any
-          const currentResult = appRegistry.get(currentFrameAtom(projectId)) as any
+          const framesResult = appRegistry.get(framesAtom) as any
+          const currentResult = appRegistry.get(currentFrameAtom) as any
           const frames = framesResult?._tag === "Success" ? framesResult.value : []
           const current = currentResult?._tag === "Success" ? currentResult.value : 0
-          appRegistry.set(setCurrentFrameAtom(projectId), Math.min(current + 1, frames.length - 1))
+          appRegistry.set(setCurrentFrameAtom, Math.min(current + 1, frames.length - 1))
         },
       },
       {
         key: "ArrowLeft",
         handler: () => {
-          const currentResult = appRegistry.get(currentFrameAtom(projectId)) as any
+          const currentResult = appRegistry.get(currentFrameAtom) as any
           const current = currentResult?._tag === "Success" ? currentResult.value : 0
-          appRegistry.set(setCurrentFrameAtom(projectId), Math.max(current - 1, 0))
+          appRegistry.set(setCurrentFrameAtom, Math.max(current - 1, 0))
         },
       },
       {
         key: "v",
-        handler: () => appRegistry.set(setActiveToolAtom(projectId), "select"),
+        handler: () => appRegistry.set(setActiveToolAtom, "select"),
       },
       {
         key: "p",
-        handler: () => appRegistry.set(setActiveToolAtom(projectId), "pen"),
+        handler: () => appRegistry.set(setActiveToolAtom, "pen"),
       },
       {
         key: "Escape",
-        handler: () => appRegistry.set(setActivePathIdAtom(projectId), null),
+        handler: () => appRegistry.set(setActivePathIdAtom, null),
       },
     ],
   })
 }
 
-// -- Hotkey setup atom (per project, runs once) --
-const editorHotkeyAtom = Atom.family((projectId: string) =>
-  Atom.make(() => {
-    setupEditorHotkeys(projectId)
-  }).pipe(Atom.keepAlive),
-)
+// -- Hotkey setup atom (runs once) --
+const editorHotkeyAtom = Atom.make(() => {
+  setupEditorHotkeys()
+}).pipe(Atom.keepAlive)
 
 function ProjectEditorPage() {
   const { id } = Route.useParams()
   const projects = useAtomValue(projectsAtom)
+
+  // Set active project ID
+  appRegistry.set(activeProjectIdAtom, id)
 
   if (!(id in projects)) {
     return (
@@ -89,7 +91,7 @@ function ProjectEditorPage() {
     )
   }
 
-  const entryResult = useAtomValue(projectDocEntryAtom(id))
+  const entryResult = useAtomValue(activeEntryAtom)
   if (!Result.isSuccess(entryResult)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -98,33 +100,32 @@ function ProjectEditorPage() {
     )
   }
 
-  return <ProjectEditor id={id} />
+  return <ProjectEditor />
 }
 
-function ProjectEditor({ id }: { id: string }) {
+function ProjectEditor() {
   // -- Mount reactive atoms --
-  useAtomMount(canvasAtom(id))
-  useAtomMount(editorHotkeyAtom(id))
+  useAtomMount(canvasAtom)
+  useAtomMount(editorHotkeyAtom)
 
   // -- Read-only atom values for rendering --
-  const nameResult = useAtomValue(projectNameAtom(id))
+  const nameResult = useAtomValue(projectNameAtom)
   const name = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
 
-  const framesResult = useAtomValue(framesAtom(id))
+  const framesResult = useAtomValue(framesAtom)
   const frames = framesResult._tag === "Success" ? framesResult.value : []
 
-  const currentFrameResult = useAtomValue(currentFrameAtom(id))
+  const currentFrameResult = useAtomValue(currentFrameAtom)
   const currentFrame = currentFrameResult._tag === "Success" ? currentFrameResult.value : 0
 
-  const triggerSetFrame = useAtomSet(setCurrentFrameAtom(id))
+  const triggerSetFrame = useAtomSet(setCurrentFrameAtom)
 
   const frameCount = frames.length
 
   // -- Import --
-  const importFn = importFnAtom(id)
-  const triggerImport = useAtomSet(importFn)
-  const importResult = useAtomValue(importFn)
-  const importProgress = useAtomValue(importProgressAtom(id))
+  const triggerImport = useAtomSet(importFnAtom)
+  const importResult = useAtomValue(importFnAtom)
+  const importProgress = useAtomValue(importProgressAtom)
   const isImporting = Result.isWaiting(importResult)
 
   useBlocker({
@@ -138,13 +139,13 @@ function ProjectEditor({ id }: { id: string }) {
   })
 
   const handleFilesSelected = useCallback((files: FileList) => {
-    triggerImport({ files, projectId: id })
-  }, [triggerImport, id])
+    triggerImport(files)
+  }, [triggerImport])
 
   // -- Container ref callback writes to atom --
   const containerRef = useCallback((el: HTMLDivElement | null) => {
-    appRegistry.set(canvasContainerAtom(id), el)
-  }, [id])
+    appRegistry.set(canvasContainerAtom, el)
+  }, [])
 
   return (
     <div className="h-screen flex flex-col">
@@ -152,7 +153,7 @@ function ProjectEditor({ id }: { id: string }) {
         <Button variant="link" asChild>
           <Link to="/">Back</Link>
         </Button>
-        <Toolbar projectId={id} />
+        <Toolbar />
         <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
         <p className="text-sm text-muted-foreground">
           {frameCount} frames
