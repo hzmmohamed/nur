@@ -147,17 +147,25 @@ export const canvasAtom = Atom.make((get) => {
     pathsLayer.batchDraw()
   }
 
+  function getLayerMasksRecord(layerId: string): Record<string, any> | null {
+    try {
+      const layerData = (root.focus("layers").focus(layerId) as any).syncGet()
+      return layerData?.masks ?? null
+    } catch {
+      return null
+    }
+  }
+
   function syncAllLayerPaths(frameId: string) {
     disposeAllPaths()
     pathsLayer.destroyChildren()
 
     const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
-    for (const [layerId, _layer] of Object.entries(layersRecord)) {
-      const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
-      const maskData = masksLens.syncGet()
-      if (!maskData) continue
+    for (const [layerId] of Object.entries(layersRecord)) {
+      const masksRecord = getLayerMasksRecord(layerId)
+      if (!masksRecord || !(frameId in masksRecord)) continue
 
-      // Create a single BezierPath for this layer's mask on this frame
+      const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
       const pathKey = `${layerId}:${frameId}`
       const bp = new BezierPath(masksLens, pathsLayer, {
         onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
@@ -171,10 +179,10 @@ export const canvasAtom = Atom.make((get) => {
     disposeAllPaths()
     pathsLayer.destroyChildren()
 
-    const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
-    const maskData = masksLens.syncGet()
-    if (!maskData) return
+    const masksRecord = getLayerMasksRecord(layerId)
+    if (!masksRecord || !(frameId in masksRecord)) return
 
+    const masksLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
     const pathKey = `${layerId}:${frameId}`
     const activePathId = getActivePathId()
     const bp = new BezierPath(masksLens, pathsLayer, {
