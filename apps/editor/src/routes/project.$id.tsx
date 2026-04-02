@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
-import { useRef, useCallback } from "react"
+import { useRef, useCallback, useEffect } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
+import Konva from "konva"
 import { projectsAtom } from "../hooks/use-project-index"
 import {
   projectReadyAtom,
@@ -9,11 +10,20 @@ import {
   framesAtom,
   currentFrameAtom,
   setCurrentFrameAtom,
+  projectDocEntryAtom,
 } from "../lib/project-doc-atoms"
 import { FrameDropZone } from "../components/frame-drop-zone"
-import { FrameCanvas } from "../components/frame-canvas"
+import { FrameCanvas, type FrameCanvasHandle } from "../components/frame-canvas"
 import { Timeline } from "../components/timeline"
+import { Toolbar } from "../components/toolbar"
 import { importFnAtom, importProgressAtom } from "../lib/import-atoms"
+import {
+  activeToolAtom,
+  activePathIdAtom,
+  setActiveToolAtom,
+  setActivePathIdAtom,
+} from "../lib/path-atoms"
+import { PathsOverlay } from "../lib/canvas-objects/paths-overlay"
 import {
   registerHotkeyContext,
   unregisterHotkeyContext,
@@ -67,12 +77,69 @@ function ProjectEditor({ id }: { id: string }) {
   const triggerSetFrame = useAtomSet(setCurrentFrameAtom(id))
 
   const mainRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<FrameCanvasHandle>(null)
+  const overlayRef = useRef<PathsOverlay | null>(null)
   const canvasSize = useAtomValue(canvasSizeAtom)
   const timelineWidth = useAtomValue(timelineWidthAtom)
   const timelineRef = useRef<HTMLDivElement>(null)
 
   const frameCount = frames.length
   const currentFrameData = frames.find((f) => f.index === currentFrame)
+
+  // -- Project doc entry (for PathsOverlay) --
+  const entryResult = useAtomValue(projectDocEntryAtom(id))
+  const entry = entryResult._tag === "Success" ? entryResult.value : null
+
+  // -- Tool state --
+  const toolResult = useAtomValue(activeToolAtom(id))
+  const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
+  const setTool = useAtomSet(setActiveToolAtom(id))
+
+  const pathIdResult = useAtomValue(activePathIdAtom(id))
+  const activePathId = Result.isSuccess(pathIdResult) ? pathIdResult.value : null
+  const setActivePathId = useAtomSet(setActivePathIdAtom(id))
+
+  // -- PathsOverlay lifecycle --
+  useEffect(() => {
+    const stage = canvasRef.current?.getStage()
+    if (!stage || !entry) return
+
+    const overlay = new PathsOverlay(stage, entry.root)
+    overlayRef.current = overlay
+    overlay.setFrame(currentFrameData?.id ?? null)
+
+    return () => {
+      overlay.dispose()
+      overlayRef.current = null
+    }
+  }, [entry]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update overlay when frame changes
+  useEffect(() => {
+    overlayRef.current?.setFrame(currentFrameData?.id ?? null)
+  }, [currentFrameData?.id])
+
+  // -- Stage click handler for pen tool --
+  const handleStageClick = useCallback((stage: Konva.Stage) => {
+    if (activeTool !== "pen") return
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+
+    const overlay = overlayRef.current
+    if (!overlay) return
+
+    let pathId = activePathId
+    if (!pathId) {
+      pathId = overlay.createPath()
+      if (!pathId) return
+      setActivePathId(pathId)
+    }
+
+    const bp = overlay.getPath(pathId)
+    if (bp) {
+      bp.appendPoint(pos.x, pos.y)
+    }
+  }, [activeTool, activePathId, setActivePathId])
 
   // Import atoms
   const importFn = importFnAtom(id)
@@ -129,7 +196,7 @@ function ProjectEditor({ id }: { id: string }) {
   })
   useAtomMount(timelineResizeAtom)
 
-  // Register hotkey context for arrow key navigation
+  // Register hotkey context for arrow key navigation + tool switching
   const hotkeyAtom = Atom.make((get) => {
     registerHotkeyContext({
       id: "editor",
@@ -141,6 +208,14 @@ function ProjectEditor({ id }: { id: string }) {
         {
           key: "ArrowLeft",
           handler: () => triggerSetFrame(Math.max(currentFrame - 1, 0)),
+        },
+        {
+          key: "v",
+          handler: () => setTool("select"),
+        },
+        {
+          key: "p",
+          handler: () => setTool("pen"),
         },
       ],
     })
@@ -154,6 +229,7 @@ function ProjectEditor({ id }: { id: string }) {
         <Button variant="link" asChild>
           <Link to="/">Back</Link>
         </Button>
+        <Toolbar projectId={id} />
         <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
         <p className="text-sm text-muted-foreground">
           {frameCount} frames
@@ -174,11 +250,13 @@ function ProjectEditor({ id }: { id: string }) {
           />
         ) : (
           <FrameCanvas
+            ref={canvasRef}
             contentHash={currentFrameData?.contentHash}
             width={canvasSize.width}
             height={canvasSize.height}
             frameWidth={currentFrameData?.width ?? 1}
             frameHeight={currentFrameData?.height ?? 1}
+            onStageClick={handleStageClick}
           />
         )}
       </main>
