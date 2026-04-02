@@ -3,32 +3,37 @@ import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { activeToolAtom, setActiveToolAtom } from "../lib/path-atoms"
 import { Button } from "@/components/ui/button"
 
-export function Toolbar() {
+export function ToolRail() {
   const toolResult = useAtomValue(activeToolAtom)
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
   const setTool = useAtomSet(setActiveToolAtom)
 
   return (
-    <div className="flex items-center gap-1" role="toolbar" aria-label="Drawing tools">
+    <div
+      className="flex flex-col items-center gap-1 py-2 w-12 flex-shrink-0 border-r border-border bg-background"
+      role="toolbar"
+      aria-label="Drawing tools"
+      aria-orientation="vertical"
+    >
       <Button
         variant={activeTool === "select" ? "default" : "ghost"}
-        size="sm"
+        size="icon"
         onClick={() => setTool("select")}
         title="Select (V)"
         aria-label="Select tool (V)"
         aria-pressed={activeTool === "select"}
       >
-        <CursorIcon className="h-4 w-4" />
+        <CursorIcon />
       </Button>
       <Button
         variant={activeTool === "pen" ? "default" : "ghost"}
-        size="sm"
+        size="icon"
         onClick={() => setTool("pen")}
         title="Pen (P)"
         aria-label="Pen tool (P)"
         aria-pressed={activeTool === "pen"}
       >
-        <PenIcon className="h-4 w-4" />
+        <PenIcon />
       </Button>
     </div>
   )

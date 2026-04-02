@@ -13,7 +13,7 @@ import {
 } from "../lib/project-doc-atoms"
 import { FrameDropZone } from "../components/frame-drop-zone"
 import { Timeline } from "../components/timeline"
-import { Toolbar } from "../components/toolbar"
+import { EditorLayout } from "../components/editor-layout"
 import { importFnAtom, importProgressAtom } from "../lib/import-atoms"
 import { canvasContainerAtom, canvasAtom } from "../lib/canvas-atom"
 import { appRegistry } from "../lib/atom-registry"
@@ -149,44 +149,45 @@ function ProjectEditor() {
   }, [])
 
   return (
-    <div className="h-screen flex flex-col">
-      <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
-        <Button variant="link" asChild>
-          <Link to="/">Back</Link>
-        </Button>
-        <Toolbar />
-        <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
-        <p className="text-sm text-muted-foreground">
-          {frameCount} frames
-        </p>
-        {frameCount > 0 && (
+    <EditorLayout
+      header={
+        <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
+          <Button variant="link" asChild>
+            <Link to="/">Back</Link>
+          </Button>
+          <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
           <p className="text-sm text-muted-foreground">
-            Frame {currentFrame + 1} / {frameCount}
+            {frameCount} frames
           </p>
-        )}
-      </header>
-
-      <main className="flex-1 relative overflow-hidden">
-        <div ref={containerRef} className="w-full h-full" />
-        {(frameCount === 0 || isImporting) && (
-          <div className="absolute inset-0">
-            <FrameDropZone
-              onFilesSelected={handleFilesSelected}
-              progress={importProgress}
-              isImporting={isImporting}
-            />
-          </div>
-        )}
-      </main>
-
-      <div>
+          {frameCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Frame {currentFrame + 1} / {frameCount}
+            </p>
+          )}
+        </header>
+      }
+      canvas={
+        <div className="relative h-full overflow-hidden">
+          <div ref={containerRef} className="w-full h-full" />
+          {(frameCount === 0 || isImporting) && (
+            <div className="absolute inset-0">
+              <FrameDropZone
+                onFilesSelected={handleFilesSelected}
+                progress={importProgress}
+                isImporting={isImporting}
+              />
+            </div>
+          )}
+        </div>
+      }
+      timeline={
         <Timeline
           frameCount={frameCount}
           currentFrame={currentFrame}
           onFrameSelect={(index) => triggerSetFrame(index)}
           width={0}
         />
-      </div>
-    </div>
+      }
+    />
   )
 }
