@@ -1,10 +1,11 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { createProjectDoc, createCurrentFrameIndex, ProjectId, type Frame, type AwarenessState } from "@nur/core"
-import { YAwareness, type YAwarenessHandle } from "effect-yjs"
+import { createCurrentFrameIndex, ProjectId, ProjectDocSchema, createYDocPersistence, type Frame, type AwarenessState } from "@nur/core"
+import { YAwareness, YDocument, type YAwarenessHandle } from "effect-yjs"
 import { AwarenessSchema } from "@nur/core"
 import * as S from "effect/Schema"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
+import * as Y from "yjs"
 import { createModuleLogger } from "./logger"
 
 const log = createModuleLogger("project-doc")
@@ -13,9 +14,9 @@ const parseProjectId = S.decodeSync(ProjectId)
 // -- Types --
 
 export interface ProjectDocEntry {
-  readonly root: ReturnType<typeof createProjectDoc>["root"]
-  readonly doc: ReturnType<typeof createProjectDoc>["doc"]
-  readonly persistence: ReturnType<typeof createProjectDoc>["persistence"]
+  readonly root: ReturnType<typeof YDocument.bind<typeof ProjectDocSchema.fields>>
+  readonly doc: Y.Doc
+  readonly persistence: ReturnType<typeof createYDocPersistence>
   readonly awareness: YAwarenessHandle<AwarenessState>
   readonly currentFrameIndex: ReturnType<typeof createCurrentFrameIndex>
 }
@@ -35,14 +36,28 @@ export const projectDocEntryAtom = Atom.family((projectId: string) =>
     Effect.gen(function* () {
       log.withContext({ projectId }).info("creating Y.Doc")
       const id = parseProjectId(projectId)
-      const { doc, root, persistence } = createProjectDoc(id)
+      const doc = new Y.Doc()
+      const persistence = createYDocPersistence(`nur-project-${id}`, doc)
 
       log.withContext({ projectId }).info("starting persistence.sync()")
       yield* Effect.promise(() => persistence.sync())
 
+      // Bind lens AFTER sync so the lens sees the hydrated Y.Doc state
+      const root = YDocument.bind(ProjectDocSchema, doc)
+
+      // Check both raw Y.Map and lens to diagnose persistence issues
+      const rootMap = doc.getMap("root")
+      const rawFramesYMap = rootMap.get("frames")
+      const rawFrameKeysFromYMap = rawFramesYMap instanceof Y.Map ? Array.from(rawFramesYMap.keys()) : []
       const rawFrames = root.focus("frames").syncGet()
-      const frameKeys = rawFrames ? Object.keys(rawFrames) : []
-      log.withContext({ projectId, frameCount: frameKeys.length }).info("sync complete")
+      const frameKeysFromLens = rawFrames ? Object.keys(rawFrames) : []
+      log.withContext({
+        projectId,
+        rootMapKeys: Array.from(rootMap.keys()),
+        framesFromYMap: rawFrameKeysFromYMap.length,
+        framesFromLens: frameKeysFromLens.length,
+        docStateSize: Y.encodeStateAsUpdate(doc).byteLength,
+      }).info("sync complete")
 
       const awareness = YAwareness.make(AwarenessSchema, doc)
       awareness.local.syncSet({
