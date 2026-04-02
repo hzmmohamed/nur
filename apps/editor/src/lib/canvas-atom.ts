@@ -159,6 +159,7 @@ export const canvasAtom = Atom.family((projectId: string) =>
       const currentResult = appRegistry.get(currentFrameAtom(projectId)) as any
       const currentIdx = currentResult?._tag === "Success" ? currentResult.value : 0
       const frameData = frames.find((f) => f.index === currentIdx)
+      log.withContext({ frameCount: frames.length, currentIdx, frameId: frameData?.id ?? null }).info("frames subscription")
 
       if (frameData) {
         currentFrameWidth = frameData.width

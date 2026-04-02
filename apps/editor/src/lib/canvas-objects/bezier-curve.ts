@@ -143,7 +143,7 @@ export class BezierPath {
   /** Create Konva objects for a single point and subscribe to its atom */
   private createPointObjects(id: string): PointObjects {
     const nodeLens = this.lens.find(id)
-    const group = new Konva.Group()
+    const group = new Konva.Group({ visible: this.active })
 
     // Handle-in line
     const handleInLine = new Konva.Line({

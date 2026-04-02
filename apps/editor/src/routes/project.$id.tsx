@@ -165,14 +165,15 @@ function ProjectEditor({ id }: { id: string }) {
       </header>
 
       <main className="flex-1 relative overflow-hidden">
-        {frameCount === 0 || isImporting ? (
-          <FrameDropZone
-            onFilesSelected={handleFilesSelected}
-            progress={importProgress}
-            isImporting={isImporting}
-          />
-        ) : (
-          <div ref={containerRef} className="w-full h-full" />
+        <div ref={containerRef} className="w-full h-full" />
+        {(frameCount === 0 || isImporting) && (
+          <div className="absolute inset-0">
+            <FrameDropZone
+              onFilesSelected={handleFilesSelected}
+              progress={importProgress}
+              isImporting={isImporting}
+            />
+          </div>
         )}
       </main>
 
