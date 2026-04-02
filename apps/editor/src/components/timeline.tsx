@@ -1,6 +1,8 @@
-import { useRef, useCallback } from "react"
+import { useRef, useCallback, useEffect } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { BrowserKeyValueStore } from "@effect/platform-browser"
+import * as S from "effect/Schema"
 import { appRegistry } from "../lib/atom-registry"
 import { layersAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
 import { tokens } from "@/tokens"
@@ -33,9 +35,30 @@ const LABEL_W = 160
 
 const FPS = 24
 
-const zoomLevelAtom = Atom.make(1)
+const timelineRuntime = Atom.runtime(BrowserKeyValueStore.layerLocalStorage)
+
+const zoomLevelAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-zoom",
+  schema: S.Number,
+  defaultValue: () => 1,
+}).pipe(Atom.keepAlive)
+
+const showTimeAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-show-time",
+  schema: S.Boolean,
+  defaultValue: () => false,
+}).pipe(Atom.keepAlive)
+
+const scrollPositionAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-scroll",
+  schema: S.Struct({ x: S.Number, y: S.Number }),
+  defaultValue: () => ({ x: 0, y: 0 }),
+}).pipe(Atom.keepAlive)
+
 const isScrubbingAtom = Atom.make(false)
-const showTimeAtom = Atom.make(false)
 
 // -- Scrubbing --
 
@@ -120,10 +143,26 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     [frameCount, onFrameSelect, positionToFrame, positionToLayerIndex, layers, setActiveLayerId],
   )
 
-  // Sync vertical scroll between label panel and grid
+  // Sync vertical scroll between label panel and grid + persist
   const handleGridScroll = useCallback(() => {
     if (gridRef.current && labelRef.current) {
       labelRef.current.scrollTop = gridRef.current.scrollTop
+      appRegistry.set(scrollPositionAtom, {
+        x: gridRef.current.scrollLeft,
+        y: gridRef.current.scrollTop,
+      })
+    }
+  }, [])
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (gridRef.current) {
+      const saved = appRegistry.get(scrollPositionAtom)
+      gridRef.current.scrollLeft = saved.x
+      gridRef.current.scrollTop = saved.y
+      if (labelRef.current) {
+        labelRef.current.scrollTop = saved.y
+      }
     }
   }, [])
 
