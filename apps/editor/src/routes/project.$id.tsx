@@ -89,8 +89,8 @@ function ProjectEditorPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <h1 className="text-2xl font-bold">Project not found</h1>
-        <Button variant="link" asChild>
-          <Link to="/">Go to home</Link>
+        <Button variant="link" render={<Link to="/" />}>
+          Go to home
         </Button>
       </div>
     )
@@ -157,8 +157,8 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
     <EditorLayout
       header={
         <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
-          <Button variant="link" asChild>
-            <Link to="/">Back</Link>
+          <Button variant="link" render={<Link to="/" />}>
+            Back
           </Button>
           <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
         </header>
@@ -179,7 +179,7 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
       }
       timeline={
         <Timeline
-          frameCount={frameCount}
+          frames={frames}
           currentFrame={currentFrame}
           onFrameSelect={(index) => triggerSetFrame(index)}
           lastModified={lastModified}

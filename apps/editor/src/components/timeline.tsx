@@ -5,8 +5,10 @@ import { appRegistry } from "../lib/atom-registry"
 import { layersAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
 import { tokens } from "@/tokens"
 
+import type { Frame } from "@nur/core"
+
 interface TimelineProps {
-  frameCount: number
+  frames: Frame[]
   currentFrame: number
   onFrameSelect: (index: number) => void
   lastModified?: number
@@ -57,7 +59,8 @@ appRegistry.subscribe(isScrubbingAtom, (scrubbing) => {
 
 // -- Component --
 
-export function Timeline({ frameCount, currentFrame, onFrameSelect, lastModified }: TimelineProps) {
+export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: TimelineProps) {
+  const frameCount = frames.length
   const [zoomLevel] = useAtom(zoomLevelAtom)
   const [showTime, setShowTime] = useAtom(showTimeAtom)
   const layersResult = useAtomValue(layersAtom)
@@ -280,7 +283,23 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect, lastModified
             />
           ))}
 
-          {/* Mask indicators — TODO: map frameId to index to show dots */}
+          {/* Mask indicators (dots) */}
+          {layers.map((layer, layerIdx) => {
+            const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
+            return frames.map((frame, frameIdx) => {
+              if (!maskFrameIds.has(frame.id)) return null
+              return (
+                <circle
+                  key={`dot-${layer.id}-${frame.id}`}
+                  cx={frameIdx * cellW + cellW / 2}
+                  cy={HEADER_H + layerIdx * ROW_H + ROW_H / 2}
+                  r={3}
+                  fill={layer.color}
+                  opacity={0.8}
+                />
+              )
+            })
+          })}
 
           {/* Active frame highlight column */}
           {currentFrame >= 0 && currentFrame < frameCount && (
