@@ -90,6 +90,12 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
       updateCount = updates.length
       console.debug(`[ydoc-persistence:${name}] sync: loaded ${updates.length} updates from IndexedDB`)
 
+      // Store current doc state before applying updates (following y-indexeddb pattern)
+      // This ensures Yjs can correctly merge updates relative to the known state vector
+      const tx2 = db.transaction(UPDATES_STORE, "readwrite")
+      const store2 = tx2.objectStore(UPDATES_STORE)
+      await idbPut(store2, Y.encodeStateAsUpdate(doc))
+
       Y.transact(doc, () => {
         for (const update of updates) {
           Y.applyUpdate(doc, update)
@@ -97,7 +103,7 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
       }, persistence, false)
 
       doc.on("update", updateHandler)
-      console.debug(`[ydoc-persistence:${name}] sync: update handler attached`)
+      console.debug(`[ydoc-persistence:${name}] sync: applied ${updates.length} updates, handler attached`)
     },
 
     storeUpdate: async (update: Uint8Array) => {
