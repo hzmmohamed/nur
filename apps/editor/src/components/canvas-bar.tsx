@@ -2,22 +2,17 @@ import { Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   activeLayerAtom,
-  layersAtom,
   setActiveLayerIdAtom,
 } from "../lib/layer-atoms"
 import { activeToolAtom, setActiveToolAtom } from "../lib/path-atoms"
-import { currentFrameAtom, framesAtom } from "../lib/project-doc-atoms"
+import { currentFrameAtom } from "../lib/project-doc-atoms"
 import { Button } from "@/components/ui/button"
 
-export function ScopeBar() {
+export function CanvasBar() {
   const activeLayerResult = useAtomValue(activeLayerAtom)
   const activeLayer = Result.isSuccess(activeLayerResult) ? activeLayerResult.value : null
-  const layersResult = useAtomValue(layersAtom)
-  const layers = Result.isSuccess(layersResult) ? layersResult.value : []
   const currentFrameResult = useAtomValue(currentFrameAtom) as Result.Result<number>
   const currentFrame = Result.isSuccess(currentFrameResult) ? currentFrameResult.value : 0
-  const framesResult = useAtomValue(framesAtom) as Result.Result<Array<{ index: number }>>
-  const frameCount = Result.isSuccess(framesResult) ? framesResult.value.length : 0
   const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
   const toolResult = useAtomValue(activeToolAtom)
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
@@ -25,68 +20,65 @@ export function ScopeBar() {
 
   if (!activeLayer) return null
 
+  // TODO: compute actual mask count from layer.masks[currentFrameId]
+  const maskCount = 0
+
   return (
-    <div className="flex items-center gap-2 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border text-sm">
-      {/* Layer dropdown */}
-      <div className="relative">
-        <select
-          value={activeLayer.id}
-          onChange={(e) => setActiveLayerId(e.target.value)}
-          className="appearance-none bg-transparent border border-border rounded-md px-2 py-0.5 pr-6 text-xs text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {layers.map((layer) => (
-            <option key={layer.id} value={layer.id}>
-              {layer.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDownIcon className="absolute right-1.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
+    <div className="flex items-center gap-3 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border">
+      {/* Frame number — highest priority */}
+      <span className="text-sm font-semibold tabular-nums">
+        F{currentFrame + 1}
+      </span>
+
+      {/* Layer color + name */}
+      <div className="flex items-center gap-1.5">
+        <div
+          className="size-2 rounded-full flex-shrink-0"
+          style={{ backgroundColor: activeLayer.color }}
+        />
+        <span className="text-xs text-muted-foreground truncate max-w-24">
+          {activeLayer.name}
+        </span>
       </div>
 
-      {/* Color indicator */}
-      <div
-        className="size-2.5 rounded-full flex-shrink-0"
-        style={{ backgroundColor: activeLayer.color }}
-      />
-
-      {/* Frame context */}
-      <span className="text-xs text-muted-foreground">
-        Frame {currentFrame + 1} / {frameCount}
+      {/* Mask count */}
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {maskCount === 0 ? "No masks" : `${maskCount} mask${maskCount > 1 ? "s" : ""}`}
       </span>
 
       <div className="flex-1" />
 
-      {/* Editing tools */}
-      <div className="flex items-center gap-0.5" role="toolbar" aria-label="Editing tools">
+      {/* Tools */}
+      <div className="flex items-center gap-0.5">
         <Button
           variant={activeTool === "select" ? "secondary" : "ghost"}
           size="sm"
-          className="h-6 px-2 text-xs"
+          className="h-6 w-6 p-0"
           onClick={() => setTool("select")}
           aria-label="Select tool (V)"
           aria-pressed={activeTool === "select"}
         >
-          Select
+          <CursorIcon className="size-3.5" />
         </Button>
         <Button
           variant={activeTool === "pen" ? "secondary" : "ghost"}
           size="sm"
-          className="h-6 px-2 text-xs"
+          className="h-6 w-6 p-0"
           onClick={() => setTool("pen")}
           aria-label="Pen tool (P)"
           aria-pressed={activeTool === "pen"}
         >
-          Pen
+          <PenIcon className="size-3.5" />
         </Button>
       </div>
 
-      {/* Close (exit Edit mode) */}
+      {/* Close */}
       <Button
         variant="ghost"
         size="sm"
+        className="h-6 w-6 p-0"
         onClick={() => setActiveLayerId(null)}
         aria-label="Exit edit mode"
-        className="h-6 px-1"
       >
         <CloseIcon className="size-3.5" />
       </Button>
@@ -94,10 +86,21 @@ export function ScopeBar() {
   )
 }
 
-function ChevronDownIcon({ className }: { className?: string }) {
+function CursorIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M6 9l6 6 6-6" />
+      <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
+    </svg>
+  )
+}
+
+function PenIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 19l7-7 3 3-7 7-3-3z" />
+      <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+      <path d="M2 2l7.586 7.586" />
+      <circle cx="11" cy="11" r="2" />
     </svg>
   )
 }

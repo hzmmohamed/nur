@@ -6,8 +6,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable"
-import { ToolRail } from "./tool-rail"
-import { ScopeBar } from "./scope-bar"
+import { CanvasBar } from "./canvas-bar"
 import { ViewportBar } from "./viewport-bar"
 import { isEditModeAtom } from "../lib/layer-atoms"
 import { zoomAtom, setZoomAtom } from "../lib/viewport-atoms"
@@ -35,41 +34,25 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
         <ResizablePanel defaultSize="70%" minSize="30%">
           <div className="flex h-full">
             <ResizablePanelGroup orientation="horizontal" className="flex-1">
-              {/* Canvas area (transforms between modes) */}
+              {/* Canvas area */}
               <ResizablePanel defaultSize="70%" minSize="30%">
-                <div className="relative h-full overflow-hidden">
-                  {/* Scope bar — slides down from top */}
+                <div className="relative flex flex-col h-full overflow-hidden">
+                  {/* Canvas bar — slides down in Edit mode */}
                   <div
-                    className={`absolute top-0 left-0 right-0 z-10 transition-transform duration-150 ease-out ${
-                      isEditMode ? "translate-y-0" : "-translate-y-full"
+                    className={`transition-all duration-150 ease-out overflow-hidden ${
+                      isEditMode ? "max-h-10" : "max-h-0"
                     }`}
                   >
-                    <ScopeBar />
+                    <CanvasBar />
                   </div>
 
-                  {/* Tool rail — slides in from left */}
-                  <div
-                    className={`absolute top-0 left-0 bottom-0 z-10 transition-transform duration-150 ease-out ${
-                      isEditMode ? "translate-x-0" : "-translate-x-full"
-                    }`}
-                  >
-                    <ToolRail />
+                  {/* Canvas content */}
+                  <div className="flex-1 min-h-0">
+                    {canvas}
                   </div>
 
-                  {/* Canvas content — shifts to accommodate tool rail and scope bar */}
-                  <div
-                    className="flex flex-col transition-all duration-150 ease-out"
-                    style={{
-                      paddingLeft: isEditMode ? 48 : 0,
-                      paddingTop: isEditMode ? 36 : 0,
-                      height: "100%",
-                    }}
-                  >
-                    <div className="flex-1 min-h-0">
-                      {canvas}
-                    </div>
-                    <ViewportBar zoom={zoom} onZoomChange={setZoom} />
-                  </div>
+                  {/* Viewport bar */}
+                  <ViewportBar zoom={zoom} onZoomChange={setZoom} />
                 </div>
               </ResizablePanel>
 
