@@ -12,6 +12,7 @@ export const AwarenessSchema = S.Struct({
   currentFrame: S.Number.pipe(S.int(), S.nonNegative()),
   activeTool: S.String.pipe(S.minLength(1)),
   activePathId: S.NullOr(S.String),
+  activeLayerId: S.NullOr(S.String),
   selection: S.Array(S.String),
   viewport: ViewportSchema,
 })

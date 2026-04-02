@@ -56,6 +56,7 @@ export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result
           currentFrame: 0,
           activeTool: "select",
           activePathId: null,
+          activeLayerId: null,
           selection: [],
           viewport: { x: 0, y: 0, zoom: 1 },
         })

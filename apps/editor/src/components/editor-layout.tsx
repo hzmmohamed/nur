@@ -5,6 +5,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable"
 import { ToolRail } from "./tool-rail"
+import { ScopeBar } from "./scope-bar"
 import { LayersPanel } from "./panels/layers-panel"
 import { PropertiesPanel } from "./panels/properties-panel"
 
@@ -18,6 +19,7 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
   return (
     <div className="h-screen flex flex-col">
       {header}
+      <ScopeBar />
 
       <ResizablePanelGroup orientation="vertical" className="flex-1">
         {/* Main area: tool rail + canvas + sidebar */}

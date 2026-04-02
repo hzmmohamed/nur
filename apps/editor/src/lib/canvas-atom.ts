@@ -3,6 +3,7 @@ import { Atom, Result } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
 import { activeToolAtom, activePathIdAtom, setActivePathIdAtom } from "./path-atoms"
+import { activeLayerIdAtom } from "./layer-atoms"
 import { frameImageAtom } from "./frame-image-cache"
 import { BezierPath } from "./canvas-objects/bezier-curve"
 import { appRegistry } from "./atom-registry"
@@ -211,6 +212,15 @@ export const canvasAtom = Atom.make((get) => {
     MutableHashMap.forEach(paths, (bp, id) => {
       bp.setActive(id === activePathId)
     })
+  })
+
+  // -- React to active layer changes (dim paths when in edit mode) --
+  get.subscribe(activeLayerIdAtom, (layerIdResult) => {
+    const activeLayerId = layerIdResult._tag === "Success" ? layerIdResult.value : null
+    // In edit mode (layer selected), dim the paths layer slightly
+    // Future: only show paths belonging to the active layer at full opacity
+    pathsLayer.opacity(activeLayerId ? 0.4 : 1)
+    pathsLayer.batchDraw()
   })
 
   // -- Stage pointer handlers for pen tool --

@@ -24,6 +24,7 @@ import {
   setActiveToolAtom,
   setActivePathIdAtom,
 } from "../lib/path-atoms"
+import { setActiveLayerIdAtom } from "../lib/layer-atoms"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -63,7 +64,10 @@ function setupEditorHotkeys() {
       },
       {
         key: "Escape",
-        handler: () => appRegistry.set(setActivePathIdAtom, null),
+        handler: () => {
+          appRegistry.set(setActivePathIdAtom, null)
+          appRegistry.set(setActiveLayerIdAtom, null)
+        },
       },
     ],
   })
