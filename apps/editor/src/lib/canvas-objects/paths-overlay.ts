@@ -2,6 +2,9 @@ import Konva from "konva"
 import * as MutableHashMap from "effect/MutableHashMap"
 import { BezierPath } from "./bezier-curve"
 import type { ProjectDocEntry } from "../project-doc-atoms"
+import { createModuleLogger } from "../logger"
+
+const olLog = createModuleLogger("paths-overlay")
 
 export class PathsOverlay {
   private readonly layer: Konva.Layer
@@ -9,13 +12,18 @@ export class PathsOverlay {
   private readonly paths = MutableHashMap.empty<string, BezierPath>()
   private currentFrameId: string | null = null
 
+  readonly stage: Konva.Stage
+
   constructor(
     stage: Konva.Stage,
     root: ProjectDocEntry["root"],
   ) {
     this.root = root
+    this.stage = stage
     this.layer = new Konva.Layer()
     stage.add(this.layer)
+    this.layer.moveToTop()
+    olLog.withContext({ layerCount: stage.getLayers().length }).info("PathsOverlay created")
   }
 
   /** Switch to a new frame — dispose old paths, create new ones */
@@ -54,7 +62,9 @@ export class PathsOverlay {
       MutableHashMap.set(this.paths, pathId, bp)
     }
 
+    this.layer.moveToTop()
     this.layer.batchDraw()
+    olLog.withContext({ pathCount: pathKeys.length, frameId: this.currentFrameId }).info("syncPaths done")
   }
 
   /** Get a BezierPath instance by ID */
@@ -67,11 +77,14 @@ export class PathsOverlay {
   createPath(): string | null {
     if (!this.currentFrameId) return null
     const pathId = crypto.randomUUID()
-    // Focusing into a new key in a Record auto-creates the Y.Map entry
     const frameLens = this.root.focus("frames").focus(this.currentFrameId)
-    ;(frameLens as any).focus("paths").focus(pathId)
-    // Sync to pick up the new path
-    this.syncPaths()
+    const pathLens = (frameLens as any).focus("paths").focus(pathId)
+    // Directly create the BezierPath with the lens — appending a point
+    // will auto-create the underlying Y.Array entry
+    const bp = new BezierPath(pathLens, this.layer)
+    MutableHashMap.set(this.paths, pathId, bp)
+    this.layer.moveToTop()
+    olLog.withContext({ pathId, frameId: this.currentFrameId, layerIndex: this.layer.getZIndex() }).info("createPath done")
     return pathId
   }
 

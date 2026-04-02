@@ -29,6 +29,9 @@ import {
   unregisterHotkeyContext,
 } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
+import { createModuleLogger } from "../lib/logger"
+
+const penLog = createModuleLogger("pen-tool")
 
 const canvasSizeAtom = Atom.make({ width: 0, height: 0 })
 const timelineWidthAtom = Atom.make(0)
@@ -99,47 +102,59 @@ function ProjectEditor({ id }: { id: string }) {
   const activePathId = Result.isSuccess(pathIdResult) ? pathIdResult.value : null
   const setActivePathId = useAtomSet(setActivePathIdAtom(id))
 
-  // -- PathsOverlay lifecycle (atom-based, no useEffect) --
-  const overlayAtom = Atom.make((get) => {
-    const stage = canvasRef.current?.getStage()
-    if (!stage || !entry) return
-    const overlay = new PathsOverlay(stage, entry.root)
-    overlayRef.current = overlay
-    overlay.setFrame(currentFrameData?.id ?? null)
+  // -- Lazily initialize overlay on first interaction, dispose on unmount --
+  const getOverlay = useCallback((stage: Konva.Stage): PathsOverlay | null => {
+    if (!entry) return null
+    if (!overlayRef.current) {
+      overlayRef.current = new PathsOverlay(stage, entry.root)
+    }
+    overlayRef.current.setFrame(currentFrameData?.id ?? null)
+    return overlayRef.current
+  }, [entry, currentFrameData?.id])
+
+  // Stable cleanup atom — keepAlive prevents re-dispose on re-renders
+  const overlayCleanupAtom = Atom.make((get) => {
     get.addFinalizer(() => {
-      overlay.dispose()
+      overlayRef.current?.dispose()
       overlayRef.current = null
     })
-  })
-  useAtomMount(overlayAtom)
+  }).pipe(Atom.keepAlive)
+  useAtomMount(overlayCleanupAtom)
 
-  // Update overlay when frame changes
-  const frameChangeAtom = Atom.make(() => {
-    overlayRef.current?.setFrame(currentFrameData?.id ?? null)
-  })
-  useAtomMount(frameChangeAtom)
+  // Update overlay when frame changes (sync paths for new frame, dispose old ones)
+  // Safe to call during render — setFrame is a cheap idempotent check on the ref
+  overlayRef.current?.setFrame(currentFrameData?.id ?? null)
 
   // -- Stage click handler for pen tool --
   const handleStageClick = useCallback((stage: Konva.Stage) => {
-    if (activeTool !== "pen") return
+    penLog.withContext({ activeTool, hasEntry: !!entry, activePathId }).info("handleStageClick called")
+    if (activeTool !== "pen") {
+      penLog.withContext({ activeTool }).debug("activeTool is not pen, returning")
+      return
+    }
     const pos = stage.getPointerPosition()
+    penLog.withContext({ pos: pos ? `${pos.x},${pos.y}` : "null" }).debug("pointer position")
     if (!pos) return
 
-    const overlay = overlayRef.current
+    const overlay = getOverlay(stage)
+    penLog.withContext({ hasOverlay: !!overlay, currentFrameId: currentFrameData?.id }).debug("overlay check")
     if (!overlay) return
 
     let pathId = activePathId
     if (!pathId) {
       pathId = overlay.createPath()
+      penLog.withContext({ pathId }).info("created new path")
       if (!pathId) return
       setActivePathId(pathId)
     }
 
     const bp = overlay.getPath(pathId)
+    penLog.withContext({ pathId, hasBP: !!bp }).debug("getPath result")
     if (bp) {
       bp.appendPoint(pos.x, pos.y)
+      penLog.withContext({ x: pos.x, y: pos.y, pathId }).info("appended point")
     }
-  }, [activeTool, activePathId, setActivePathId])
+  }, [activeTool, activePathId, setActivePathId, getOverlay, entry, currentFrameData?.id])
 
   // Import atoms
   const importFn = importFnAtom(id)

@@ -6,6 +6,9 @@ import type { YLinkedListLens } from "effect-yjs"
 import { cartesianToPolar, polarToCartesian } from "@/lib/domain/coordinate-utils"
 import { buildSvgPathData, findNearestPointOnPath } from "./bezier-math"
 import type { BezierPointData } from "./path"
+import { createModuleLogger } from "../logger"
+
+const bpLog = createModuleLogger("bezier-path")
 
 const POINT_RADIUS = 6
 const HANDLE_RADIUS = 4
@@ -64,8 +67,10 @@ export class BezierPath {
   /** Subscribe to ids() atom — diff to create/destroy Konva objects */
   private startStructuralLoop(): void {
     const idsAtom = this.lens.ids()
+    bpLog.info("startStructuralLoop: subscribing to ids atom")
 
     this.unsubscribeIds = this.registry.subscribe(idsAtom, (newIds) => {
+      bpLog.withContext({ count: HashSet.size(newIds), oldCount: HashSet.size(this.currentIds) }).info("ids changed")
       const oldIds = this.currentIds
       this.currentIds = newIds
       this.syncPointObjects(oldIds, newIds)
@@ -75,8 +80,10 @@ export class BezierPath {
   /** Subscribe to the whole list atom to rebuild SVG path on any change */
   private startPathRenderLoop(): void {
     const listAtom = this.lens.atom()
+    bpLog.info("startPathRenderLoop: subscribing to list atom")
 
-    this.unsubscribeList = this.registry.subscribe(listAtom, () => {
+    this.unsubscribeList = this.registry.subscribe(listAtom, (points) => {
+      bpLog.withContext({ pointCount: Array.isArray(points) ? points.length : "unknown" }).info("list changed, updating path line")
       this.updatePathLine()
     }, { immediate: true })
   }
@@ -285,11 +292,14 @@ export class BezierPath {
 
   /** Append a new point at the end of the path */
   appendPoint(x: number, y: number): string {
-    return this.lens.append({
+    bpLog.withContext({ x, y, currentLength: this.lens.length() }).info("appendPoint called")
+    const id = this.lens.append({
       x, y,
       handleInAngle: 0, handleInDistance: 0,
       handleOutAngle: 0, handleOutDistance: 0,
     })
+    bpLog.withContext({ id, newLength: this.lens.length() }).info("appendPoint result")
+    return id
   }
 
   /** Clean up all subscriptions and Konva objects */
