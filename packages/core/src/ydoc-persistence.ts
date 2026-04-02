@@ -55,6 +55,17 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
 
   let pendingWrites = 0
 
+  let flushScheduled = false
+
+  const scheduleFlush = () => {
+    if (flushScheduled) return
+    flushScheduled = true
+    setTimeout(() => {
+      flushScheduled = false
+      persistence.flush()
+    }, 1000)
+  }
+
   const updateHandler = (update: Uint8Array, origin: unknown) => {
     if (origin === persistence || destroyed) return
     pendingWrites++
@@ -62,6 +73,7 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
     persistence.storeUpdate(update).then(() => {
       pendingWrites--
       console.debug(`[ydoc-persistence:${name}] update stored, pending=${pendingWrites}, total=${updateCount}`)
+      scheduleFlush()
     }).catch((err) => {
       pendingWrites--
       console.error(`[ydoc-persistence:${name}] storeUpdate failed`, err)
