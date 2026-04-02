@@ -106,11 +106,13 @@ function ProjectEditor({ id }: { id: string }) {
   const getOverlay = useCallback((stage: Konva.Stage): PathsOverlay | null => {
     if (!entry) return null
     if (!overlayRef.current) {
-      overlayRef.current = new PathsOverlay(stage, entry.root)
+      overlayRef.current = new PathsOverlay(stage, entry.root, {
+        onSelectPath: (pathId) => setActivePathId(pathId),
+      })
     }
     overlayRef.current.setFrame(currentFrameData?.id ?? null)
     return overlayRef.current
-  }, [entry, currentFrameData?.id])
+  }, [entry, currentFrameData?.id, setActivePathId])
 
   // Stable cleanup atom — keepAlive prevents re-dispose on re-renders
   const overlayCleanupAtom = Atom.make((get) => {
@@ -121,9 +123,10 @@ function ProjectEditor({ id }: { id: string }) {
   }).pipe(Atom.keepAlive)
   useAtomMount(overlayCleanupAtom)
 
-  // Update overlay when frame changes (sync paths for new frame, dispose old ones)
-  // Safe to call during render — setFrame is a cheap idempotent check on the ref
+  // Update overlay when frame changes and sync active path styling
+  // Safe to call during render — these are cheap idempotent checks on the ref
   overlayRef.current?.setFrame(currentFrameData?.id ?? null)
+  overlayRef.current?.setActivePathId(activePathId)
 
   // -- Stage click handler for pen tool --
   const handleStageClick = useCallback((stage: Konva.Stage) => {
@@ -231,6 +234,10 @@ function ProjectEditor({ id }: { id: string }) {
         {
           key: "p",
           handler: () => setTool("pen"),
+        },
+        {
+          key: "Escape",
+          handler: () => setActivePathId(null),
         },
       ],
     })

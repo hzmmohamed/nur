@@ -15,7 +15,9 @@ const HANDLE_RADIUS = 4
 const POINT_COLOR = "#4A90D9"
 const HANDLE_COLOR = "#E87D3E"
 const PATH_COLOR = "#FFFFFF"
+const PATH_COLOR_INACTIVE = "#888888"
 const PATH_WIDTH = 2
+const PATH_WIDTH_INACTIVE = 1
 const HANDLE_LINE_COLOR = "#666666"
 const HIT_TOLERANCE = 10
 
@@ -29,6 +31,10 @@ interface PointObjects {
   unsubscribe: () => void
 }
 
+export interface BezierPathOptions {
+  onSelect?: () => void
+}
+
 export class BezierPath {
   private readonly registry: Registry.Registry
   private pointObjects: HashMap.HashMap<string, PointObjects> = HashMap.empty()
@@ -38,11 +44,14 @@ export class BezierPath {
   private unsubscribeIds: (() => void) | null = null
   private unsubscribeList: (() => void) | null = null
   private currentIds: HashSet.HashSet<string> = HashSet.empty()
+  private active = true
+  private readonly onSelect?: () => void
 
-  constructor(lens: YLinkedListLens<BezierPointData>, layer: Konva.Layer) {
+  constructor(lens: YLinkedListLens<BezierPointData>, layer: Konva.Layer, options?: BezierPathOptions) {
     this.lens = lens
     this.layer = layer
     this.registry = Registry.make()
+    this.onSelect = options?.onSelect
 
     // Create the path line (behind everything)
     this.pathLine = new Konva.Path({
@@ -54,14 +63,31 @@ export class BezierPath {
     })
     this.layer.add(this.pathLine)
 
-    // Click on path line -> insert point
+    // Click on path line -> select (if inactive) or insert point (if active)
     this.pathLine.on("click", (e) => {
       e.cancelBubble = true
-      this.handlePathClick()
+      if (!this.active && this.onSelect) {
+        this.onSelect()
+      } else if (this.active) {
+        this.handlePathClick()
+      }
     })
 
     this.startStructuralLoop()
     this.startPathRenderLoop()
+  }
+
+  /** Set active/inactive visual state. Inactive hides points/handles, dims path. */
+  setActive(active: boolean): void {
+    if (this.active === active) return
+    this.active = active
+    this.pathLine.stroke(active ? PATH_COLOR : PATH_COLOR_INACTIVE)
+    this.pathLine.strokeWidth(active ? PATH_WIDTH : PATH_WIDTH_INACTIVE)
+    // Toggle visibility of all point objects
+    HashMap.forEach(this.pointObjects, (objects) => {
+      objects.group.visible(active)
+    })
+    this.layer.batchDraw()
   }
 
   /** Subscribe to ids() atom — diff to create/destroy Konva objects */

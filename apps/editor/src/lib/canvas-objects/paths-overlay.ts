@@ -11,19 +11,32 @@ export class PathsOverlay {
   private readonly root: ProjectDocEntry["root"]
   private readonly paths = MutableHashMap.empty<string, BezierPath>()
   private currentFrameId: string | null = null
+  private activePathId: string | null = null
+  private onSelectPath?: (pathId: string) => void
 
   readonly stage: Konva.Stage
 
   constructor(
     stage: Konva.Stage,
     root: ProjectDocEntry["root"],
+    options?: { onSelectPath?: (pathId: string) => void },
   ) {
     this.root = root
     this.stage = stage
+    this.onSelectPath = options?.onSelectPath
     this.layer = new Konva.Layer()
     stage.add(this.layer)
     this.layer.moveToTop()
     olLog.withContext({ layerCount: stage.getLayers().length }).info("PathsOverlay created")
+  }
+
+  /** Set which path is active — updates styling on all paths */
+  setActivePathId(pathId: string | null): void {
+    if (this.activePathId === pathId) return
+    this.activePathId = pathId
+    MutableHashMap.forEach(this.paths, (bp, id) => {
+      bp.setActive(id === pathId)
+    })
   }
 
   /** Switch to a new frame — dispose old paths, create new ones */
@@ -58,7 +71,10 @@ export class PathsOverlay {
     for (const pathId of pathKeys) {
       if (MutableHashMap.has(this.paths, pathId)) continue
       const pathLens = (frameLens as any).focus("paths").focus(pathId)
-      const bp = new BezierPath(pathLens, this.layer)
+      const bp = new BezierPath(pathLens, this.layer, {
+        onSelect: () => this.onSelectPath?.(pathId),
+      })
+      bp.setActive(pathId === this.activePathId)
       MutableHashMap.set(this.paths, pathId, bp)
     }
 
@@ -79,12 +95,15 @@ export class PathsOverlay {
     const pathId = crypto.randomUUID()
     const frameLens = this.root.focus("frames").focus(this.currentFrameId)
     const pathLens = (frameLens as any).focus("paths").focus(pathId)
-    // Directly create the BezierPath with the lens — appending a point
-    // will auto-create the underlying Y.Array entry
-    const bp = new BezierPath(pathLens, this.layer)
+    const bp = new BezierPath(pathLens, this.layer, {
+      onSelect: () => this.onSelectPath?.(pathId),
+    })
+    // New path is active by default, dim all others
+    this.setActivePathId(pathId)
+    bp.setActive(true)
     MutableHashMap.set(this.paths, pathId, bp)
     this.layer.moveToTop()
-    olLog.withContext({ pathId, frameId: this.currentFrameId, layerIndex: this.layer.getZIndex() }).info("createPath done")
+    olLog.withContext({ pathId, frameId: this.currentFrameId }).info("createPath done")
     return pathId
   }
 
