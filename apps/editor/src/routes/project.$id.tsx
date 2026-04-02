@@ -150,9 +150,18 @@ function ProjectEditor({ id }: { id: string }) {
   }, [entry, currentFrameData?.id, id])
 
   // Update overlay when frame changes and sync active path styling
-  penLog.withContext({ hasOverlay: !!overlayRef.current, frameId: currentFrameData?.id }).debug("render-time setFrame")
-  overlayRef.current?.setFrame(currentFrameData?.id ?? null)
-  overlayRef.current?.setActivePathId(activePathId)
+  // Deferred to avoid setState-during-render when lens creates Y structures
+  const currentFrameId = currentFrameData?.id ?? null
+  const prevFrameIdRef = useRef<string | null>(null)
+  const prevActivePathIdRef = useRef<string | null>(null)
+  if (overlayRef.current && (currentFrameId !== prevFrameIdRef.current || activePathId !== prevActivePathIdRef.current)) {
+    prevFrameIdRef.current = currentFrameId
+    prevActivePathIdRef.current = activePathId
+    queueMicrotask(() => {
+      overlayRef.current?.setFrame(currentFrameId)
+      overlayRef.current?.setActivePathId(activePathId)
+    })
+  }
 
   // -- Stage click handler for pen tool --
   const handleStageClick = useCallback((stage: Konva.Stage) => {

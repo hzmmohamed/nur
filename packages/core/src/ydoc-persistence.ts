@@ -53,9 +53,19 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
   let destroyed = false
   let updateCount = 0
 
+  let pendingWrites = 0
+
   const updateHandler = (update: Uint8Array, origin: unknown) => {
     if (origin === persistence || destroyed) return
-    persistence.storeUpdate(update)
+    pendingWrites++
+    console.debug(`[ydoc-persistence:${name}] update received, size=${update.byteLength}, pending=${pendingWrites}, origin=${origin}`)
+    persistence.storeUpdate(update).then(() => {
+      pendingWrites--
+      console.debug(`[ydoc-persistence:${name}] update stored, pending=${pendingWrites}, total=${updateCount}`)
+    }).catch((err) => {
+      pendingWrites--
+      console.error(`[ydoc-persistence:${name}] storeUpdate failed`, err)
+    })
   }
 
   const persistence: YDocPersistence = {
@@ -66,6 +76,7 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
       const store = tx.objectStore(UPDATES_STORE)
       const updates = await idbGetAll(store)
       updateCount = updates.length
+      console.debug(`[ydoc-persistence:${name}] sync: loaded ${updates.length} updates from IndexedDB`)
 
       Y.transact(doc, () => {
         for (const update of updates) {
@@ -74,6 +85,7 @@ export function createYDocPersistence(name: string, doc: Y.Doc): YDocPersistence
       }, persistence, false)
 
       doc.on("update", updateHandler)
+      console.debug(`[ydoc-persistence:${name}] sync: update handler attached`)
     },
 
     storeUpdate: async (update: Uint8Array) => {

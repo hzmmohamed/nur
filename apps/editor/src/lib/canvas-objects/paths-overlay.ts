@@ -85,6 +85,13 @@ export class PathsOverlay {
     for (const pathId of pathKeys) {
       if (MutableHashMap.has(this.paths, pathId)) continue
       const pathLens = pathsLens.focus(pathId)
+      // Log the point data from the record we already read
+      const pointData = pathsRecord[pathId]
+      olLog.withContext({
+        pathId,
+        pointCount: Array.isArray(pointData) ? pointData.length : "N/A",
+        points: Array.isArray(pointData) ? pointData.map((p: any) => `(${p._id?.slice(-8)}:${p.x},${p.y})`).join(" | ") : "none",
+      }).info("restoring path from lens")
       const bp = new BezierPath(pathLens, this.layer, {
         onSelect: () => this.onSelectPath?.(pathId),
       })

@@ -196,6 +196,10 @@ export class BezierPath {
       const y = pointCircle.y()
       nodeLens.focus("x").syncSet(x)
       nodeLens.focus("y").syncSet(y)
+      // Verify the write persisted into the lens
+      const readback = nodeLens.syncGet()
+      const match = readback?.x === x && readback?.y === y
+      bpLog.withContext({ id, w: `${x},${y}`, r: `${readback?.x},${readback?.y}`, match }).debug("drag")
     })
 
     handleInCircle.on("dragmove", () => {
@@ -223,6 +227,7 @@ export class BezierPath {
 
     const nodeAtom = nodeLens.atom()
     const initialData = this.registry.get(nodeAtom)
+    bpLog.withContext({ id, hasInitialData: !!initialData, x: initialData?.x, y: initialData?.y }).debug("createPointObjects initial data")
     if (initialData) {
       this.updatePointKonva(initialData, pointCircle, handleInLine, handleInCircle, handleOutLine, handleOutCircle)
     }
