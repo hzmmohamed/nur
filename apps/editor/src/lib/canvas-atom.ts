@@ -45,6 +45,12 @@ export const canvasAtom = Atom.make((get) => {
   const paths = MutableHashMap.empty<string, BezierPath>()
   let currentFrameId: string | null = null
 
+  // -- Pointer gesture state for pen tool --
+  let dragOrigin: { x: number; y: number } | null = null
+  let newPointId: string | null = null
+  let isDraggingNewHandle = false
+  const DRAG_THRESHOLD = 3
+
   // -- Resize observer --
   const resizeObserver = new ResizeObserver((entries) => {
     const entry = entries[0]
@@ -207,8 +213,8 @@ export const canvasAtom = Atom.make((get) => {
     })
   })
 
-  // -- Stage click handler --
-  stage.on("click", () => {
+  // -- Stage pointer handlers for pen tool --
+  stage.on("pointerdown", () => {
     const tool = getActiveTool()
     if (tool !== "pen") return
 
@@ -232,8 +238,46 @@ export const canvasAtom = Atom.make((get) => {
 
     const bp = MutableHashMap.get(paths, pathId)
     if (bp._tag === "Some") {
-      bp.value.appendPoint(pos.x, pos.y)
+      const id = bp.value.appendPoint(pos.x, pos.y)
+      dragOrigin = { x: pos.x, y: pos.y }
+      newPointId = id
+      isDraggingNewHandle = false
     }
+  })
+
+  stage.on("pointermove", () => {
+    if (!dragOrigin || !newPointId) return
+
+    const pos = stage.getPointerPosition()
+    if (!pos) return
+
+    const dx = pos.x - dragOrigin.x
+    const dy = pos.y - dragOrigin.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (!isDraggingNewHandle && dist < DRAG_THRESHOLD) return
+    isDraggingNewHandle = true
+
+    const pathId = getActivePathId()
+    if (!pathId || !currentFrameId) return
+
+    const pathsLens = (root.focus("frames").focus(currentFrameId) as any).focus("paths")
+    const pathLens = pathsLens.focus(pathId)
+    const nodeLens = pathLens.find(newPointId)
+
+    // handleOut points from origin toward cursor
+    const angle = Math.atan2(dy, dx)
+    nodeLens.focus("handleOutAngle").syncSet(angle)
+    nodeLens.focus("handleOutDistance").syncSet(dist)
+    // Mirror: handleIn points opposite direction, same distance
+    nodeLens.focus("handleInAngle").syncSet(angle + Math.PI)
+    nodeLens.focus("handleInDistance").syncSet(dist)
+  })
+
+  stage.on("pointerup", () => {
+    dragOrigin = null
+    newPointId = null
+    isDraggingNewHandle = false
   })
 
   // -- Cleanup --

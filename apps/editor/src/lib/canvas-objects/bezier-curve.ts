@@ -20,6 +20,10 @@ const PATH_WIDTH = 2
 const PATH_WIDTH_INACTIVE = 1
 const HANDLE_LINE_COLOR = "#666666"
 const HIT_TOLERANCE = 10
+const POINT_COLOR_HOVER = "#6BB0F0"
+const HANDLE_COLOR_HOVER = "#F0A060"
+const POINT_HIT_BUFFER = 6
+const HANDLE_HIT_BUFFER = 6
 
 interface PointObjects {
   group: Konva.Group
@@ -46,6 +50,8 @@ export class BezierPath {
   private currentIds: HashSet.HashSet<string> = HashSet.empty()
   private active = true
   private readonly onSelect?: () => void
+  private readonly ghostVertex: Konva.Circle
+  private ghostSplitResult: ReturnType<typeof findNearestPointOnPath> | null = null
 
   constructor(lens: YLinkedListLens<BezierPointData>, layer: Konva.Layer, options?: BezierPathOptions) {
     this.lens = lens
@@ -63,13 +69,68 @@ export class BezierPath {
     })
     this.layer.add(this.pathLine)
 
-    // Click on path line -> select (if inactive) or insert point (if active)
-    this.pathLine.on("click", (e) => {
+    // Ghost vertex for edge-insertion preview
+    this.ghostVertex = new Konva.Circle({
+      radius: POINT_RADIUS,
+      fill: POINT_COLOR,
+      opacity: 0.4,
+      visible: false,
+      listening: false,
+    })
+    this.layer.add(this.ghostVertex)
+
+    // Path line hover — highlight inactive paths
+    this.pathLine.on("pointerenter", () => {
+      if (!this.active) {
+        this.pathLine.stroke(PATH_COLOR)
+        const s = this.layer.getStage()
+        if (s) s.container().style.cursor = "pointer"
+        this.layer.batchDraw()
+      }
+    })
+    this.pathLine.on("pointerleave", () => {
+      if (!this.active) {
+        this.pathLine.stroke(PATH_COLOR_INACTIVE)
+      }
+      this.ghostVertex.visible(false)
+      this.ghostSplitResult = null
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "default"
+      this.layer.batchDraw()
+    })
+
+    // Ghost vertex positioning on active path edge
+    this.pathLine.on("pointermove", () => {
+      if (!this.active) return
+      const stage = this.layer.getStage()
+      if (!stage) return
+      const pos = stage.getPointerPosition()
+      if (!pos) return
+
+      const points = this.lens.get()
+      const nodesMap = this.lens.nodes()
+      const ids = Array.from(nodesMap.keys())
+
+      const result = findNearestPointOnPath(points, pos.x, pos.y, HIT_TOLERANCE, ids)
+      if (result) {
+        this.ghostVertex.position({ x: result.point.x, y: result.point.y })
+        this.ghostVertex.visible(true)
+        this.ghostSplitResult = result
+        stage.container().style.cursor = "copy"
+      } else {
+        this.ghostVertex.visible(false)
+        this.ghostSplitResult = null
+      }
+      this.layer.batchDraw()
+    })
+
+    // Pointerdown on path line — select (inactive) or insert point (active)
+    this.pathLine.on("pointerdown", (e) => {
       e.cancelBubble = true
       if (!this.active && this.onSelect) {
         this.onSelect()
-      } else if (this.active) {
-        this.handlePathClick()
+      } else if (this.active && this.ghostSplitResult) {
+        this.insertPointFromGhost()
       }
     })
 
@@ -87,6 +148,10 @@ export class BezierPath {
     HashMap.forEach(this.pointObjects, (objects) => {
       objects.group.visible(active)
     })
+    if (!active) {
+      this.ghostVertex.visible(false)
+      this.ghostSplitResult = null
+    }
     this.layer.batchDraw()
   }
 
@@ -159,6 +224,7 @@ export class BezierPath {
       fill: HANDLE_COLOR,
       draggable: true,
       visible: false,
+      hitStrokeWidth: HANDLE_HIT_BUFFER,
     })
 
     // Handle-out line
@@ -175,6 +241,7 @@ export class BezierPath {
       fill: HANDLE_COLOR,
       draggable: true,
       visible: false,
+      hitStrokeWidth: HANDLE_HIT_BUFFER,
     })
 
     // Point circle (on top)
@@ -184,6 +251,7 @@ export class BezierPath {
       stroke: "#FFFFFF",
       strokeWidth: 1,
       draggable: true,
+      hitStrokeWidth: POINT_HIT_BUFFER,
     })
 
     group.add(handleInLine, handleInCircle, handleOutLine, handleOutCircle, pointCircle)
@@ -218,10 +286,50 @@ export class BezierPath {
       nodeLens.focus("handleOutDistance").syncSet(polar.distance)
     })
 
-    // Prevent click from bubbling to stage
-    pointCircle.on("click", (e) => { e.cancelBubble = true })
-    handleInCircle.on("click", (e) => { e.cancelBubble = true })
-    handleOutCircle.on("click", (e) => { e.cancelBubble = true })
+    // Prevent pointerdown from bubbling to stage
+    pointCircle.on("pointerdown", (e) => { e.cancelBubble = true })
+    handleInCircle.on("pointerdown", (e) => { e.cancelBubble = true })
+    handleOutCircle.on("pointerdown", (e) => { e.cancelBubble = true })
+
+    // Hover states
+    pointCircle.on("pointerenter", () => {
+      pointCircle.fill(POINT_COLOR_HOVER)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "move"
+      this.layer.batchDraw()
+    })
+    pointCircle.on("pointerleave", () => {
+      pointCircle.fill(POINT_COLOR)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "default"
+      this.layer.batchDraw()
+    })
+
+    handleInCircle.on("pointerenter", () => {
+      handleInCircle.fill(HANDLE_COLOR_HOVER)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "move"
+      this.layer.batchDraw()
+    })
+    handleInCircle.on("pointerleave", () => {
+      handleInCircle.fill(HANDLE_COLOR)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "default"
+      this.layer.batchDraw()
+    })
+
+    handleOutCircle.on("pointerenter", () => {
+      handleOutCircle.fill(HANDLE_COLOR_HOVER)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "move"
+      this.layer.batchDraw()
+    })
+    handleOutCircle.on("pointerleave", () => {
+      handleOutCircle.fill(HANDLE_COLOR)
+      const s = this.layer.getStage()
+      if (s) s.container().style.cursor = "default"
+      this.layer.batchDraw()
+    })
 
     // --- Reactive update (Yjs -> Konva) ---
 
@@ -290,26 +398,19 @@ export class BezierPath {
     this.layer.batchDraw()
   }
 
-  /** Handle click on the path line — insert a new point via de Casteljau */
-  private handlePathClick(): void {
-    const stage = this.layer.getStage()
-    if (!stage) return
-    const pos = stage.getPointerPosition()
-    if (!pos) return
+  /** Insert a new point using the cached ghost vertex split result */
+  private insertPointFromGhost(): void {
+    const result = this.ghostSplitResult
+    if (!result) return
 
-    const points = this.lens.get()
     const nodesMap = this.lens.nodes()
     const ids = Array.from(nodesMap.keys())
 
-    const result = findNearestPointOnPath(points, pos.x, pos.y, HIT_TOLERANCE, ids)
-    if (!result) return
-
-    // Update the neighbor handles and insert the new point
+    // Update the neighbor handles
     const prevLens = this.lens.find(result.afterId)
     prevLens.focus("handleOutAngle").syncSet(result.updatedPrevHandleOut.angle)
     prevLens.focus("handleOutDistance").syncSet(result.updatedPrevHandleOut.distance)
 
-    // Find the next node ID (the one after afterId in the list)
     const afterIdx = ids.indexOf(result.afterId)
     if (afterIdx >= 0 && afterIdx < ids.length - 1) {
       const nextId = ids[afterIdx + 1]
@@ -319,6 +420,10 @@ export class BezierPath {
     }
 
     this.lens.insertAfter(result.afterId, result.point)
+
+    // Clear ghost state
+    this.ghostVertex.visible(false)
+    this.ghostSplitResult = null
   }
 
   /** Append a new point at the end of the path */
@@ -344,6 +449,7 @@ export class BezierPath {
     })
     this.pointObjects = HashMap.empty()
 
+    this.ghostVertex.destroy()
     this.pathLine.destroy()
     this.registry.dispose()
   }
