@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { Result } from "@effect-atom/atom"
+import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -9,6 +10,7 @@ import { ToolRail } from "./tool-rail"
 import { ScopeBar } from "./scope-bar"
 import { ViewportBar } from "./viewport-bar"
 import { isEditModeAtom } from "../lib/layer-atoms"
+import { zoomAtom, setZoomAtom } from "../lib/viewport-atoms"
 import { LayersPanel } from "./panels/layers-panel"
 import { PropertiesPanel } from "./panels/properties-panel"
 
@@ -20,6 +22,9 @@ interface EditorLayoutProps {
 
 export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
   const isEditMode = useAtomValue(isEditModeAtom)
+  const zoomResult = useAtomValue(zoomAtom)
+  const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
+  const setZoom = useAtomSet(setZoomAtom)
 
   return (
     <div className="h-screen flex flex-col">
@@ -63,7 +68,7 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                     <div className="flex-1 min-h-0">
                       {canvas}
                     </div>
-                    <ViewportBar zoom={1} onZoomChange={() => {}} />
+                    <ViewportBar zoom={zoom} onZoomChange={setZoom} />
                   </div>
                 </div>
               </ResizablePanel>

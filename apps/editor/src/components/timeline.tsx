@@ -68,6 +68,18 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
     [cellW, frameCount],
   )
 
+  const positionToLayerIndex = useCallback(
+    (clientY: number): number => {
+      if (!gridRef.current) return -1
+      const rect = gridRef.current.getBoundingClientRect()
+      const y = clientY - rect.top + gridRef.current.scrollTop - HEADER_H
+      if (y < 0) return -1
+      const idx = Math.floor(y / ROW_H)
+      return idx >= 0 && idx < layers.length ? idx : -1
+    },
+    [layers.length],
+  )
+
   scrubbingCallback = (clientX: number) => {
     onFrameSelect(positionToFrame(clientX))
   }
@@ -78,8 +90,14 @@ export function Timeline({ frameCount, currentFrame, onFrameSelect }: TimelinePr
       e.preventDefault()
       appRegistry.set(isScrubbingAtom, true)
       onFrameSelect(positionToFrame(e.clientX))
+
+      // Also select the layer row that was clicked
+      const layerIdx = positionToLayerIndex(e.clientY)
+      if (layerIdx >= 0 && layers[layerIdx]) {
+        setActiveLayerId(layers[layerIdx].id)
+      }
     },
-    [frameCount, onFrameSelect, positionToFrame],
+    [frameCount, onFrameSelect, positionToFrame, positionToLayerIndex, layers, setActiveLayerId],
   )
 
   // Sync vertical scroll between label panel and grid
