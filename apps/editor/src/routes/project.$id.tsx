@@ -4,7 +4,7 @@ import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { projectsAtom } from "../hooks/use-project-index"
 import {
-  projectReadyAtom,
+  projectDocEntryAtom,
   projectNameAtom,
   framesAtom,
   currentFrameAtom,
@@ -89,8 +89,8 @@ function ProjectEditorPage() {
     )
   }
 
-  const readyResult = useAtomValue(projectReadyAtom(id))
-  if (!Result.isSuccess(readyResult)) {
+  const entryResult = useAtomValue(projectDocEntryAtom(id))
+  if (!Result.isSuccess(entryResult)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />

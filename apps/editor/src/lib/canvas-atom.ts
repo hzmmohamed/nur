@@ -1,7 +1,7 @@
 import Konva from "konva"
 import { Atom, Result } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
-import { projectDocEntryAtom, projectReadyAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
+import { projectDocEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
 import { activeToolAtom, activePathIdAtom, setActivePathIdAtom } from "./path-atoms"
 import { frameImageAtom } from "./frame-image-cache"
 import { BezierPath } from "./canvas-objects/bezier-curve"
@@ -24,15 +24,15 @@ export const canvasAtom = Atom.family((projectId: string) =>
     const container = get(canvasContainerAtom(projectId))
     if (!container) return
 
-    // Gate on persistence sync before reading Y.Doc — prevents reading empty doc
-    const readyResult = get(projectReadyAtom(projectId))
-    if (!Result.isSuccess(readyResult)) return
-
+    // Cache lookup now includes persistence.sync() — no separate ready gate needed
     const entryResult = get(projectDocEntryAtom(projectId))
     if (!Result.isSuccess(entryResult)) return
     const { root } = entryResult.value
 
-    log.info("creating Konva stage")
+    // Log Y.Doc state at canvas creation time
+    const rawFrames = root.focus("frames").syncGet()
+    const rawFrameKeys = rawFrames ? Object.keys(rawFrames) : []
+    log.withContext({ rawFrameKeys }).info("creating Konva stage")
 
     // -- Create Stage + layers --
     const stage = new Konva.Stage({

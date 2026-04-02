@@ -32,9 +32,12 @@ const projectDocCacheAtom = projectDocRuntime.atom(
       capacity: 64,
       timeToLive: Duration.infinity,
       lookup: (projectId: string) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           const id = parseProjectId(projectId)
           const { doc, root, persistence } = createProjectDoc(id)
+          // Hydrate Y.Doc from IndexedDB before returning — prevents race condition
+          // where lens reads empty doc before persistence data is loaded
+          yield* Effect.promise(() => persistence.sync())
           const awareness = YAwareness.make(AwarenessSchema, doc)
           awareness.local.syncSet({
             currentFrame: 0,
