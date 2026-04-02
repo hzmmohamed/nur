@@ -6,9 +6,9 @@ import * as Effect from "effect/Effect"
 export const activeToolAtom = Atom.family((projectId: string) => {
   const entryAtom = projectDocEntryAtom(projectId)
   let toolAtom: Atom.Atom<string | undefined> | undefined
-  return Atom.make((get) => {
+  return Atom.make((get): Result.Result<string> => {
     const result = get(entryAtom)
-    if (!Result.isSuccess(result)) return result
+    if (!Result.isSuccess(result)) return result as unknown as Result.Result<string>
     if (!toolAtom) toolAtom = result.value.awareness.local.focus("activeTool").atom()
     return Result.success((get(toolAtom) as string) ?? "select")
   })
@@ -18,9 +18,9 @@ export const activeToolAtom = Atom.family((projectId: string) => {
 export const activePathIdAtom = Atom.family((projectId: string) => {
   const entryAtom = projectDocEntryAtom(projectId)
   let pathIdAtom: Atom.Atom<string | null | undefined> | undefined
-  return Atom.make((get) => {
+  return Atom.make((get): Result.Result<string | null> => {
     const result = get(entryAtom)
-    if (!Result.isSuccess(result)) return result
+    if (!Result.isSuccess(result)) return result as unknown as Result.Result<string | null>
     if (!pathIdAtom) pathIdAtom = result.value.awareness.local.focus("activePathId").atom()
     return Result.success(get(pathIdAtom) as string | null)
   })
