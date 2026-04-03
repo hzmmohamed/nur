@@ -368,6 +368,11 @@ export const canvasAtom = Atom.make((get) => {
   // -- Pan: space+drag or middle mouse drag --
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === " " && !e.repeat) {
+      e.preventDefault()
+      // Blur any focused element to prevent space from triggering its click
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+      }
       spaceHeld = true
       container.style.cursor = "grab"
     }
