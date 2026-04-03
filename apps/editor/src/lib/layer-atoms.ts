@@ -98,6 +98,31 @@ export const createLayerAtom = projectDocRuntime.fn(
   }),
 )
 
+/** Discard the current mask being drawn (delete from Y.Doc) */
+export const discardCurrentMaskAtom = projectDocRuntime.fn(
+  Effect.fnUntraced(function* (_: void, get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    if (!activeLayerId) return
+
+    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    // Find the frameId for this index
+    const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
+    const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
+    const frame = frames[currentFrame] as { id: string } | undefined
+    if (!frame) return
+
+    // Delete the mask entry from the layer's masks record
+    const layersMap = entry.doc.getMap("root").get("layers") as any
+    if (!layersMap) return
+    const layerMap = layersMap.get(activeLayerId) as any
+    if (!layerMap) return
+    const masksMap = layerMap.get("masks") as any
+    if (!masksMap) return
+    masksMap.delete(frame.id)
+  }),
+)
+
 /** Delete a layer */
 export const deleteLayerAtom = projectDocRuntime.fn(
   Effect.fnUntraced(function* (layerId: string, get: Atom.FnContext) {

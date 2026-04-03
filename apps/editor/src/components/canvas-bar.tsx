@@ -3,6 +3,7 @@ import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   activeLayerAtom,
   setActiveLayerIdAtom,
+  discardCurrentMaskAtom,
 } from "../lib/layer-atoms"
 import {
   activeToolAtom,
@@ -27,6 +28,7 @@ export function CanvasBar() {
   const drawingResult = useAtomValue(drawingStateAtom)
   const drawingState = Result.isSuccess(drawingResult) ? drawingResult.value : "idle"
   const setDrawingState = useAtomSet(setDrawingStateAtom)
+  const discardMask = useAtomSet(discardCurrentMaskAtom)
 
   const isDrawing = drawingState !== "idle"
   const isClosed = drawingState === "closed"
@@ -78,7 +80,7 @@ export function CanvasBar() {
                 className="h-6 px-2 text-xs gap-1 text-destructive-foreground"
                 onClick={() => {
                   popHotkeyScope()
-                  // TODO: delete incomplete path from Y.Doc
+                  discardMask()
                   setDrawingState("idle")
                   setTool("select")
                 }}
@@ -113,7 +115,7 @@ export function CanvasBar() {
                         key: "Escape",
                         handler: () => {
                           popHotkeyScope()
-                          // TODO: delete incomplete path from Y.Doc
+                          appRegistry.set(discardCurrentMaskAtom, undefined)
                           appRegistry.set(setDrawingStateAtom, "idle")
                           appRegistry.set(setActiveToolAtom, "select")
                         },
