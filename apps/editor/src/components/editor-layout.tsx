@@ -8,6 +8,7 @@ import {
 import { CanvasBar } from "./canvas-bar"
 import { CanvasStatusBar } from "./canvas-status-bar"
 import { isEditModeAtom } from "../lib/layer-atoms"
+import { isDrawingAtom } from "../lib/path-atoms"
 import { LayersPanel } from "./panels/layers-panel"
 import { PropertiesPanel } from "./panels/properties-panel"
 
@@ -19,6 +20,7 @@ interface EditorLayoutProps {
 
 export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
   const isEditMode = useAtomValue(isEditModeAtom)
+  const isDrawing = useAtomValue(isDrawingAtom)
 
   return (
     <div className="h-screen flex flex-col">
@@ -61,7 +63,8 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                 collapsible
                 collapsedSize="0%"
               >
-                <div className="flex flex-col h-full bg-background">
+                <div className="relative flex flex-col h-full bg-background">
+                  {isDrawing && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
                   <div className="flex-1 overflow-y-auto scrollbar-thin">
                     <LayersPanel />
                   </div>
@@ -84,7 +87,10 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
           collapsible
           collapsedSize="0%"
         >
-          {timeline}
+          <div className="relative h-full">
+            {isDrawing && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
+            {timeline}
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

@@ -4,7 +4,12 @@ import {
   activeLayerAtom,
   setActiveLayerIdAtom,
 } from "../lib/layer-atoms"
-import { activeToolAtom, setActiveToolAtom } from "../lib/path-atoms"
+import {
+  activeToolAtom,
+  setActiveToolAtom,
+  drawingStateAtom,
+  setDrawingStateAtom,
+} from "../lib/path-atoms"
 import { currentFrameAtom } from "../lib/project-doc-atoms"
 import { Button } from "@/components/ui/button"
 
@@ -17,15 +22,18 @@ export function CanvasBar() {
   const toolResult = useAtomValue(activeToolAtom)
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
   const setTool = useAtomSet(setActiveToolAtom)
+  const drawingResult = useAtomValue(drawingStateAtom)
+  const drawingState = Result.isSuccess(drawingResult) ? drawingResult.value : "idle"
+  const setDrawingState = useAtomSet(setDrawingStateAtom)
 
-  // TODO: compute actual mask count from layer.masks[currentFrameId]
-  const maskCount = 0
+  const isDrawing = drawingState !== "idle"
+  const isClosed = drawingState === "closed"
 
   return (
     <div className="flex items-center gap-3 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border">
-      {activeLayer ? (
+      {activeLayer && (
         <>
-          {/* Frame number — highest priority */}
+          {/* Frame number */}
           <span className="text-sm font-semibold tabular-nums">
             F{currentFrame + 1}
           </span>
@@ -41,72 +49,85 @@ export function CanvasBar() {
             </span>
           </div>
 
-          {/* Mask count */}
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {maskCount === 0 ? "No masks" : `${maskCount} mask${maskCount > 1 ? "s" : ""}`}
-          </span>
-        </>
-      ) : null}
-
-      {activeLayer && (
-        <>
           <div className="flex-1" />
 
-          {/* Tools */}
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant={activeTool === "select" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={() => setTool("select")}
-              aria-label="Select tool (V)"
-              aria-pressed={activeTool === "select"}
-            >
-              <CursorIcon className="size-3.5" />
-            </Button>
-            <Button
-              variant={activeTool === "pen" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={() => setTool("pen")}
-              aria-label="Pen tool (P)"
-              aria-pressed={activeTool === "pen"}
-            >
-              <PenIcon className="size-3.5" />
-            </Button>
-          </div>
+          {isDrawing ? (
+            /* New Mask mode: Done + Discard */
+            <div className="flex items-center gap-1">
+              <Button
+                variant={isClosed ? "default" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-xs gap-1"
+                disabled={!isClosed}
+                onClick={() => {
+                  setDrawingState("idle")
+                  setTool("select")
+                }}
+                title={isClosed ? "Commit mask" : "Close the path by clicking the first point"}
+              >
+                <CheckIcon className="size-3" />
+                Done
+              </Button>
 
-          {/* Close */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={() => setActiveLayerId(null)}
-            aria-label="Exit edit mode"
-          >
-            <CloseIcon className="size-3.5" />
-          </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1 text-destructive-foreground"
+                onClick={() => {
+                  // TODO: delete incomplete path from Y.Doc
+                  setDrawingState("idle")
+                  setTool("select")
+                }}
+                title="Discard this path"
+              >
+                <CloseIcon className="size-3" />
+                Discard
+              </Button>
+            </div>
+          ) : (
+            /* Edit mode: sub-tool buttons + close */
+            <div className="flex items-center gap-1">
+              <Button
+                variant={activeTool === "select" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setTool("select")}
+              >
+                Edit Mask
+              </Button>
+              <Button
+                variant={activeTool === "pen" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => {
+                  setTool("pen")
+                  setDrawingState("drawing")
+                }}
+              >
+                New Mask
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setActiveLayerId(null)}
+                aria-label="Exit edit mode"
+              >
+                <CloseIcon className="size-3.5" />
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
   )
 }
 
-function CursorIcon({ className }: { className?: string }) {
+function CheckIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
-    </svg>
-  )
-}
-
-function PenIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M12 19l7-7 3 3-7 7-3-3z" />
-      <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-      <path d="M2 2l7.586 7.586" />
-      <circle cx="11" cy="11" r="2" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+      <path d="M20 6L9 17l-5-5" />
     </svg>
   )
 }

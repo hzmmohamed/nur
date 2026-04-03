@@ -37,6 +37,15 @@ export function buildSvgPathData(points: ReadonlyArray<BezierPointData>): string
     }
   }
 
+  // Close path if first and last points share coordinates
+  if (points.length >= 3) {
+    const first = points[0]
+    const last = points[points.length - 1]
+    if (first.x === last.x && first.y === last.y) {
+      parts.push("Z")
+    }
+  }
+
   return parts.join(" ")
 }
 

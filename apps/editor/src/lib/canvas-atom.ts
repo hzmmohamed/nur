@@ -2,7 +2,7 @@ import Konva from "konva"
 import { Atom, Result } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
-import { activeToolAtom, activePathIdAtom, setActivePathIdAtom } from "./path-atoms"
+import { activeToolAtom, activePathIdAtom, setActivePathIdAtom, drawingStateAtom, setDrawingStateAtom } from "./path-atoms"
 import { activeLayerIdAtom } from "./layer-atoms"
 import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
@@ -283,12 +283,20 @@ export const canvasAtom = Atom.make((get) => {
     }
   })
 
+  function getDrawingState(): string {
+    const result = appRegistry.get(drawingStateAtom) as any
+    return result?._tag === "Success" ? result.value : "idle"
+  }
+
   // -- Stage pointer handlers for pen tool --
   stage.on("pointerdown", () => {
     if (spaceHeld || isPanning) return
 
     const tool = getActiveTool()
     if (tool !== "pen") return
+
+    // Only add points when actively drawing
+    if (getDrawingState() !== "drawing") return
 
     const activeLayerId = getActiveLayerId()
     if (!activeLayerId || !currentFrameId) return
@@ -311,12 +319,27 @@ export const canvasAtom = Atom.make((get) => {
     }
 
     const bp = MutableHashMap.get(paths, pathKey)
-    if (bp._tag === "Some") {
-      const id = bp.value.appendPoint(pos.x, pos.y)
-      dragOrigin = { x: pos.x, y: pos.y }
-      newPointId = id
-      isDraggingNewHandle = false
+    if (bp._tag !== "Some") return
+
+    // Check if near the first point (close-ready) — need 3+ existing points
+    const points = bp.value.getPoints()
+    if (points.length >= 3) {
+      const first = points[0]
+      const dx = pos.x - first.x
+      const dy = pos.y - first.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 10) {
+        // Close the path: append a point at exactly the first point's position
+        bp.value.appendPoint(first.x, first.y)
+        appRegistry.set(setDrawingStateAtom, "closed")
+        return
+      }
     }
+
+    const id = bp.value.appendPoint(pos.x, pos.y)
+    dragOrigin = { x: pos.x, y: pos.y }
+    newPointId = id
+    isDraggingNewHandle = false
   })
 
   stage.on("pointermove", () => {

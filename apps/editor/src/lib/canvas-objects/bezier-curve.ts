@@ -427,6 +427,11 @@ export class BezierPath {
     this.ghostSplitResult = null
   }
 
+  /** Get all points in the path */
+  getPoints(): ReadonlyArray<BezierPointData> {
+    return this.lens.get()
+  }
+
   /** Append a new point at the end of the path */
   appendPoint(x: number, y: number): string {
     bpLog.withContext({ x, y, currentLength: this.lens.length() }).info("appendPoint called")
