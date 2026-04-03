@@ -249,6 +249,20 @@ export const canvasAtom = Atom.make((get) => {
     })
   })
 
+  // -- React to zoom changes — scale stage --
+  get.subscribe(zoomAtom, (zoomResult) => {
+    const zoom = zoomResult._tag === "Success" ? zoomResult.value : 1
+    const stageW = stage.width()
+    const stageH = stage.height()
+    // Scale from center
+    stage.scale({ x: zoom, y: zoom })
+    stage.offset({
+      x: (stageW / 2) * (1 - 1 / zoom),
+      y: (stageH / 2) * (1 - 1 / zoom),
+    })
+    stage.batchDraw()
+  })
+
   // -- React to active layer changes — re-sync paths for current frame --
   get.subscribe(activeLayerIdAtom, () => {
     if (currentFrameId) {
