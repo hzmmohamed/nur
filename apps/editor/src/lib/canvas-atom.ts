@@ -294,6 +294,14 @@ export const canvasAtom = Atom.make((get) => {
     return result?._tag === "Success" ? result.value : "idle"
   }
 
+  /** Convert screen pointer position to stage-local coordinates */
+  function getStagePointerPosition(): { x: number; y: number } | null {
+    const pos = stage.getPointerPosition()
+    if (!pos) return null
+    const transform = stage.getAbsoluteTransform().copy().invert()
+    return transform.point(pos)
+  }
+
   // -- Stage pointer handlers for pen tool --
   stage.on("pointerdown", () => {
     if (spaceHeld || isPanning) return
@@ -307,7 +315,7 @@ export const canvasAtom = Atom.make((get) => {
     const activeLayerId = getActiveLayerId()
     if (!activeLayerId || !currentFrameId) return
 
-    const pos = stage.getPointerPosition()
+    const pos = getStagePointerPosition()
     if (!pos) return
 
     const pathKey = `${activeLayerId}:${currentFrameId}`
@@ -351,7 +359,7 @@ export const canvasAtom = Atom.make((get) => {
   stage.on("pointermove", () => {
     if (!dragOrigin || !newPointId) return
 
-    const pos = stage.getPointerPosition()
+    const pos = getStagePointerPosition()
     if (!pos) return
 
     const dx = pos.x - dragOrigin.x
