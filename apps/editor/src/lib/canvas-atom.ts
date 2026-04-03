@@ -53,6 +53,12 @@ export const canvasAtom = Atom.make((get) => {
   let isDraggingNewHandle = false
   const DRAG_THRESHOLD = 3
 
+  // -- Pan state --
+  let isPanning = false
+  let panStart: { x: number; y: number } | null = null
+  let stageStartPos: { x: number; y: number } | null = null
+  let spaceHeld = false
+
   // -- Resize observer --
   const resizeObserver = new ResizeObserver((entries) => {
     const entry = entries[0]
@@ -272,6 +278,8 @@ export const canvasAtom = Atom.make((get) => {
 
   // -- Stage pointer handlers for pen tool --
   stage.on("pointerdown", () => {
+    if (spaceHeld || isPanning) return
+
     const tool = getActiveTool()
     if (tool !== "pen") return
 
@@ -350,10 +358,62 @@ export const canvasAtom = Atom.make((get) => {
   }
   container.addEventListener("wheel", handleWheel, { passive: false })
 
+  // -- Pan: space+drag or middle mouse drag --
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === " " && !e.repeat) {
+      spaceHeld = true
+      container.style.cursor = "grab"
+    }
+  }
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (e.key === " ") {
+      spaceHeld = false
+      if (!isPanning) container.style.cursor = ""
+    }
+  }
+  const handlePanStart = (e: MouseEvent) => {
+    // Middle mouse (button 1) or space+left click (button 0)
+    if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+      e.preventDefault()
+      isPanning = true
+      panStart = { x: e.clientX, y: e.clientY }
+      stageStartPos = { x: stage.x(), y: stage.y() }
+      container.style.cursor = "grabbing"
+    }
+  }
+  const handlePanMove = (e: MouseEvent) => {
+    if (!isPanning || !panStart || !stageStartPos) return
+    const dx = e.clientX - panStart.x
+    const dy = e.clientY - panStart.y
+    stage.position({
+      x: stageStartPos.x + dx,
+      y: stageStartPos.y + dy,
+    })
+    stage.batchDraw()
+  }
+  const handlePanEnd = () => {
+    if (!isPanning) return
+    isPanning = false
+    panStart = null
+    stageStartPos = null
+    container.style.cursor = spaceHeld ? "grab" : ""
+  }
+
+  window.addEventListener("keydown", handleKeyDown)
+  window.addEventListener("keyup", handleKeyUp)
+  container.addEventListener("mousedown", handlePanStart)
+  window.addEventListener("mousemove", handlePanMove)
+  window.addEventListener("mouseup", handlePanEnd)
+
   // -- Cleanup --
   get.addFinalizer(() => {
     log.info("destroying Konva stage")
     container.removeEventListener("wheel", handleWheel)
+    window.removeEventListener("keydown", handleKeyDown)
+    window.removeEventListener("keyup", handleKeyUp)
+    container.removeEventListener("mousedown", handlePanStart)
+    window.removeEventListener("mousemove", handlePanMove)
+    window.removeEventListener("mouseup", handlePanEnd)
     imageUnsubscribe?.()
     disposeAllPaths()
     resizeObserver.disconnect()
