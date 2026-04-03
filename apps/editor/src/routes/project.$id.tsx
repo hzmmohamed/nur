@@ -130,13 +130,13 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
 
   const handleBack = useCallback(() => {
     appRegistry.set(transitionProjectIdAtom, id)
-    const nav = () => navigate({ to: "/" })
+    const nav = () => window.history.back()
     if (document.startViewTransition) {
       document.startViewTransition(nav)
     } else {
       nav()
     }
-  }, [navigate, id])
+  }, [id])
 
   // -- Mount reactive atoms --
   useAtomMount(canvasAtom)
