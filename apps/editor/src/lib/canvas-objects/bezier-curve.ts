@@ -53,6 +53,7 @@ export class BezierPath {
   private readonly onSelect?: () => void
   private readonly ghostVertex: Konva.Circle
   private ghostSplitResult: ReturnType<typeof findNearestPointOnPath> | null = null
+  private currentZoom = 1
 
   constructor(lens: YLinkedListLens<BezierPointData>, layer: Konva.Layer, options?: BezierPathOptions) {
     this.lens = lens
@@ -141,15 +142,24 @@ export class BezierPath {
 
   /** Update point/handle scale to compensate for stage zoom */
   updateScale(zoom: number): void {
+    this.currentZoom = zoom
     const inv = 1 / zoom
     HashMap.forEach(this.pointObjects, (objects) => {
-      objects.group.scale({ x: inv, y: inv })
+      this.applyInverseScale(objects, inv)
     })
     this.ghostVertex.scale({ x: inv, y: inv })
     // Path stroke width should also stay constant
     this.pathLine.strokeWidth((this.active ? PATH_WIDTH : PATH_WIDTH_INACTIVE) / zoom)
     this.pathLine.hitStrokeWidth(HIT_TOLERANCE * 2 / zoom)
     this.layer.batchDraw()
+  }
+
+  /** Apply inverse scale to individual circles within a point group */
+  private applyInverseScale(objects: PointObjects, inv: number): void {
+    objects.pointCircle.scale({ x: inv, y: inv })
+    objects.handleInCircle.scale({ x: inv, y: inv })
+    objects.handleOutCircle.scale({ x: inv, y: inv })
+    // Lines don't need scaling — they're positioned by absolute coords
   }
 
   /** Set active/inactive visual state. Inactive hides points/handles, dims path. */
@@ -360,12 +370,19 @@ export class BezierPath {
       this.layer.batchDraw()
     })
 
-    return {
+    const result = {
       group, pointCircle,
       handleInLine, handleInCircle,
       handleOutLine, handleOutCircle,
       unsubscribe,
     }
+
+    // Apply current zoom scale immediately
+    if (this.currentZoom !== 1) {
+      this.applyInverseScale(result, 1 / this.currentZoom)
+    }
+
+    return result
   }
 
   /** Update Konva objects from point data */
