@@ -18,70 +18,76 @@ export function CanvasBar() {
   const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
   const setTool = useAtomSet(setActiveToolAtom)
 
-  if (!activeLayer) return null
-
   // TODO: compute actual mask count from layer.masks[currentFrameId]
   const maskCount = 0
 
   return (
     <div className="flex items-center gap-3 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border">
-      {/* Frame number — highest priority */}
-      <span className="text-sm font-semibold tabular-nums">
-        F{currentFrame + 1}
-      </span>
+      {activeLayer ? (
+        <>
+          {/* Frame number — highest priority */}
+          <span className="text-sm font-semibold tabular-nums">
+            F{currentFrame + 1}
+          </span>
 
-      {/* Layer color + name */}
-      <div className="flex items-center gap-1.5">
-        <div
-          className="size-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: activeLayer.color }}
-        />
-        <span className="text-xs text-muted-foreground truncate max-w-24">
-          {activeLayer.name}
-        </span>
-      </div>
+          {/* Layer color + name */}
+          <div className="flex items-center gap-1.5">
+            <div
+              className="size-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: activeLayer.color }}
+            />
+            <span className="text-xs text-muted-foreground truncate max-w-24">
+              {activeLayer.name}
+            </span>
+          </div>
 
-      {/* Mask count */}
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {maskCount === 0 ? "No masks" : `${maskCount} mask${maskCount > 1 ? "s" : ""}`}
-      </span>
+          {/* Mask count */}
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {maskCount === 0 ? "No masks" : `${maskCount} mask${maskCount > 1 ? "s" : ""}`}
+          </span>
+        </>
+      ) : null}
 
-      <div className="flex-1" />
+      {activeLayer && (
+        <>
+          <div className="flex-1" />
 
-      {/* Tools */}
-      <div className="flex items-center gap-0.5">
-        <Button
-          variant={activeTool === "select" ? "secondary" : "ghost"}
-          size="sm"
-          className="h-6 w-6 p-0"
-          onClick={() => setTool("select")}
-          aria-label="Select tool (V)"
-          aria-pressed={activeTool === "select"}
-        >
-          <CursorIcon className="size-3.5" />
-        </Button>
-        <Button
-          variant={activeTool === "pen" ? "secondary" : "ghost"}
-          size="sm"
-          className="h-6 w-6 p-0"
-          onClick={() => setTool("pen")}
-          aria-label="Pen tool (P)"
-          aria-pressed={activeTool === "pen"}
-        >
-          <PenIcon className="size-3.5" />
-        </Button>
-      </div>
+          {/* Tools */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant={activeTool === "select" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setTool("select")}
+              aria-label="Select tool (V)"
+              aria-pressed={activeTool === "select"}
+            >
+              <CursorIcon className="size-3.5" />
+            </Button>
+            <Button
+              variant={activeTool === "pen" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setTool("pen")}
+              aria-label="Pen tool (P)"
+              aria-pressed={activeTool === "pen"}
+            >
+              <PenIcon className="size-3.5" />
+            </Button>
+          </div>
 
-      {/* Close */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 w-6 p-0"
-        onClick={() => setActiveLayerId(null)}
-        aria-label="Exit edit mode"
-      >
-        <CloseIcon className="size-3.5" />
-      </Button>
+          {/* Close */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => setActiveLayerId(null)}
+            aria-label="Exit edit mode"
+          >
+            <CloseIcon className="size-3.5" />
+          </Button>
+        </>
+      )}
     </div>
   )
 }
