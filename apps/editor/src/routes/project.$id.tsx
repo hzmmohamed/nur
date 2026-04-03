@@ -121,10 +121,10 @@ function ProjectEditorPage() {
   }
 
   const projectMeta = projects[id]
-  return <ProjectEditor lastModified={projectMeta?.updatedAt} />
+  return <ProjectEditor metaName={projectMeta?.name} lastModified={projectMeta?.updatedAt} />
 }
 
-function ProjectEditor({ lastModified }: { lastModified?: number }) {
+function ProjectEditor({ metaName, lastModified }: { metaName?: string; lastModified?: number }) {
   const navigate = useNavigate()
   const { id } = Route.useParams()
 
@@ -144,7 +144,8 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
 
   // -- Read-only atom values for rendering --
   const nameResult = useAtomValue(projectNameAtom)
-  const name = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
+  const docName = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
+  const name = docName || metaName || "Untitled"
 
   const framesResult = useAtomValue(framesAtom)
   const frames = framesResult._tag === "Success" ? framesResult.value : []
@@ -184,11 +185,21 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
   return (
     <EditorLayout
       header={
-        <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
-          <Button variant="link" onClick={handleBack}>
-            Back
+        <header className="flex items-center gap-3 px-4 py-2 border-b border-border">
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleBack}>
+            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
           </Button>
-          <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
+          <h1 className="text-sm font-semibold">{name}</h1>
+          <span className="text-xs text-muted-foreground">
+            {isImporting
+              ? `Importing ${importProgress.completed}/${importProgress.total}...`
+              : lastModified
+                ? `Saved ${formatRelativeTime(lastModified)}`
+                : "No changes"
+            }
+          </span>
         </header>
       }
       canvas={
@@ -215,4 +226,18 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
       }
     />
   )
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 10) return "just now"
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return new Date(timestamp).toLocaleDateString()
 }
