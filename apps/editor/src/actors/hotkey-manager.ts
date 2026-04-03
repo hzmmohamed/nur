@@ -1,5 +1,4 @@
 import { Atom } from "@effect-atom/atom"
-import * as MutableHashMap from "effect/MutableHashMap"
 import { syncSet } from "../lib/atom-registry"
 import { createModuleLogger } from "../lib/logger"
 
@@ -22,9 +21,14 @@ export interface HotkeyContext {
 
 export const activeContextIdAtom: Atom.Writable<string | null> = Atom.make<string | null>(null)
 
-// -- Internal registry --
+// -- Scope stack --
 
-const contexts = MutableHashMap.empty<string, HotkeyContext>()
+const scopeStack: HotkeyContext[] = []
+
+function getActiveBindings(): ReadonlyArray<HotkeyBinding> {
+  if (scopeStack.length === 0) return []
+  return scopeStack[scopeStack.length - 1].bindings
+}
 
 function parseKey(e: KeyboardEvent): string {
   const parts: Array<string> = []
@@ -35,28 +39,43 @@ function parseKey(e: KeyboardEvent): string {
   return parts.join("+")
 }
 
-function getAllBindings(): ReadonlyArray<HotkeyBinding> {
-  const result: HotkeyBinding[] = []
-  MutableHashMap.forEach(contexts, (ctx) => {
-    for (const b of ctx.bindings) result.push(b)
-  })
-  return result
-}
-
 // -- Registration functions --
 
+/** Push a hotkey context onto the stack. Only the top context's bindings are active. */
+export function pushHotkeyScope(context: HotkeyContext): void {
+  scopeStack.push(context)
+  syncSet(activeContextIdAtom, context.id)
+  hkLog.withContext({ contextId: context.id, stackDepth: scopeStack.length }).info("pushHotkeyScope")
+}
+
+/** Pop the top hotkey context. Restores the previous context's bindings. */
+export function popHotkeyScope(): void {
+  const removed = scopeStack.pop()
+  const current = scopeStack.length > 0 ? scopeStack[scopeStack.length - 1] : null
+  syncSet(activeContextIdAtom, current?.id ?? null)
+  hkLog.withContext({ removedId: removed?.id, restoredId: current?.id, stackDepth: scopeStack.length }).info("popHotkeyScope")
+}
+
+/** Replace the bottom scope (convenience for the base editor context). */
 export function registerHotkeyContext(context: HotkeyContext): void {
-  MutableHashMap.set(contexts, context.id, context)
-  hkLog.withContext({ contextId: context.id, bindingCount: context.bindings.length }).info("registerHotkeyContext")
+  // If the stack is empty or the bottom is the same id, replace it
+  if (scopeStack.length === 0) {
+    scopeStack.push(context)
+  } else if (scopeStack[0].id === context.id) {
+    scopeStack[0] = context
+  } else {
+    scopeStack.unshift(context)
+  }
+  if (scopeStack.length === 1) {
+    syncSet(activeContextIdAtom, context.id)
+  }
+  hkLog.withContext({ contextId: context.id, stackDepth: scopeStack.length }).info("registerHotkeyContext")
 }
 
 export function unregisterHotkeyContext(contextId: string): void {
-  MutableHashMap.remove(contexts, contextId)
-  hkLog.withContext({ contextId }).info("unregisterHotkeyContext")
-}
-
-export function focusHotkeyContext(contextId: string): void {
-  syncSet(activeContextIdAtom, contextId)
+  const idx = scopeStack.findIndex((c) => c.id === contextId)
+  if (idx >= 0) scopeStack.splice(idx, 1)
+  hkLog.withContext({ contextId, stackDepth: scopeStack.length }).info("unregisterHotkeyContext")
 }
 
 // -- Global keydown listener (starts on module load) --
@@ -65,7 +84,7 @@ hkLog.info("installing global keydown listener")
 
 window.addEventListener("keydown", (e) => {
   const key = parseKey(e)
-  const bindings = getAllBindings()
+  const bindings = getActiveBindings()
   const binding = bindings.find((b) => b.key === key)
   hkLog.withContext({ key, bindingCount: bindings.length, matched: !!binding }).debug("keydown")
   if (binding) {

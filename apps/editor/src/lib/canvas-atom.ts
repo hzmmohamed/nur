@@ -266,6 +266,8 @@ export const canvasAtom = Atom.make((get) => {
       x: (stageW / 2) * (1 - 1 / zoom),
       y: (stageH / 2) * (1 - 1 / zoom),
     })
+    // Update all paths to compensate for zoom
+    MutableHashMap.forEach(paths, (bp) => bp.updateScale(zoom))
     stage.batchDraw()
   })
 

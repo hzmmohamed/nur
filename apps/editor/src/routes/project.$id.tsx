@@ -23,8 +23,6 @@ import { Spinner } from "@/components/ui/spinner"
 import {
   setActiveToolAtom,
   setActivePathIdAtom,
-  drawingStateAtom,
-  setDrawingStateAtom,
 } from "../lib/path-atoms"
 import { setActiveLayerIdAtom } from "../lib/layer-atoms"
 import { setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
@@ -68,17 +66,8 @@ function setupEditorHotkeys() {
       {
         key: "Escape",
         handler: () => {
-          const drawingResult = appRegistry.get(drawingStateAtom) as any
-          const drawing = drawingResult?._tag === "Success" ? drawingResult.value : "idle"
-          if (drawing !== "idle") {
-            // During drawing, Escape discards (resets to idle)
-            // TODO: delete incomplete path from Y.Doc
-            appRegistry.set(setDrawingStateAtom, "idle")
-            appRegistry.set(setActiveToolAtom, "select")
-          } else {
-            appRegistry.set(setActivePathIdAtom, null)
-            appRegistry.set(setActiveLayerIdAtom, null)
-          }
+          appRegistry.set(setActivePathIdAtom, null)
+          appRegistry.set(setActiveLayerIdAtom, null)
         },
       },
       {

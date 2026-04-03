@@ -11,6 +11,8 @@ import {
   setDrawingStateAtom,
 } from "../lib/path-atoms"
 import { currentFrameAtom } from "../lib/project-doc-atoms"
+import { pushHotkeyScope, popHotkeyScope } from "../actors/hotkey-manager"
+import { appRegistry } from "../lib/atom-registry"
 import { Button } from "@/components/ui/button"
 
 export function CanvasBar() {
@@ -60,6 +62,7 @@ export function CanvasBar() {
                 className="h-6 px-2 text-xs gap-1"
                 disabled={!isClosed}
                 onClick={() => {
+                  popHotkeyScope()
                   setDrawingState("idle")
                   setTool("select")
                 }}
@@ -74,6 +77,7 @@ export function CanvasBar() {
                 size="sm"
                 className="h-6 px-2 text-xs gap-1 text-destructive-foreground"
                 onClick={() => {
+                  popHotkeyScope()
                   // TODO: delete incomplete path from Y.Doc
                   setDrawingState("idle")
                   setTool("select")
@@ -102,6 +106,20 @@ export function CanvasBar() {
                 onClick={() => {
                   setTool("pen")
                   setDrawingState("drawing")
+                  pushHotkeyScope({
+                    id: "drawing",
+                    bindings: [
+                      {
+                        key: "Escape",
+                        handler: () => {
+                          popHotkeyScope()
+                          // TODO: delete incomplete path from Y.Doc
+                          appRegistry.set(setDrawingStateAtom, "idle")
+                          appRegistry.set(setActiveToolAtom, "select")
+                        },
+                      },
+                    ],
+                  })
                 }}
               >
                 New Mask

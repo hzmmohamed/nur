@@ -175,8 +175,8 @@ export const tokens = {
 
   // -- Canvas sizing (unitless — used in Konva, not CSS) --
   canvas: {
-    pointRadius: 6,
-    handleRadius: 4,
+    pointRadius: 4,
+    handleRadius: 3,
     pointStrokeWidth: 1,
     guideStrokeWidth: 1,
     pathWidth: 2,

@@ -139,6 +139,19 @@ export class BezierPath {
     this.startPathRenderLoop()
   }
 
+  /** Update point/handle scale to compensate for stage zoom */
+  updateScale(zoom: number): void {
+    const inv = 1 / zoom
+    HashMap.forEach(this.pointObjects, (objects) => {
+      objects.group.scale({ x: inv, y: inv })
+    })
+    this.ghostVertex.scale({ x: inv, y: inv })
+    // Path stroke width should also stay constant
+    this.pathLine.strokeWidth((this.active ? PATH_WIDTH : PATH_WIDTH_INACTIVE) / zoom)
+    this.pathLine.hitStrokeWidth(HIT_TOLERANCE * 2 / zoom)
+    this.layer.batchDraw()
+  }
+
   /** Set active/inactive visual state. Inactive hides points/handles, dims path. */
   setActive(active: boolean): void {
     if (this.active === active) return
