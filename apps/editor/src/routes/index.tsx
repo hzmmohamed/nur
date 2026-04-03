@@ -313,9 +313,7 @@ function ThumbnailImage({ contentHash }: { contentHash: string }) {
   const result = useAtomValue(thumbnailAtom(contentHash))
   const url = Result.isSuccess(result) ? result.value : undefined
 
-  if (!url) {
-    return <span className="text-xs text-muted-foreground">Loading...</span>
-  }
+  if (!url) return null
 
   return (
     <img
