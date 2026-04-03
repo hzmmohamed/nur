@@ -62,10 +62,10 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                 collapsedSize="0%"
               >
                 <div className="flex flex-col h-full bg-background">
-                  <div className="flex-1 overflow-y-auto">
+                  <div className="flex-1 overflow-y-auto scrollbar-thin">
                     <LayersPanel />
                   </div>
-                  <div className="flex-1 overflow-y-auto border-t border-border">
+                  <div className="flex-1 overflow-y-auto scrollbar-thin border-t border-border">
                     <PropertiesPanel />
                   </div>
                 </div>

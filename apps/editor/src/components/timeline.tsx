@@ -258,7 +258,7 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
       {/* Right: frame grid */}
       <div
         ref={gridRefCallback}
-        className="flex-1 overflow-auto cursor-ew-resize"
+        className="flex-1 overflow-auto cursor-ew-resize scrollbar-thin"
         onMouseDown={handleGridMouseDown}
         onScroll={handleGridScroll}
       >

@@ -50,7 +50,7 @@ export function LayersPanel() {
       </div>
 
       {/* Layer list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
         {layers.length === 0 ? (
           <div className="flex items-center justify-center p-4">
             <p className="text-sm text-muted-foreground text-center">
