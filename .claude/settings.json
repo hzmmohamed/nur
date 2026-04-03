@@ -4,7 +4,8 @@
       "Bash(npx tsc:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(find /home/hfahmi/work/freelance/nur/apps/editor -name *.config.* -o -name tailwind.* -o -name postcss.*)"
     ]
   },
   "enabledPlugins": {
