@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useCallback, useRef } from "react"
+import { useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
@@ -26,6 +26,8 @@ export const gridScrollAtom = Atom.kvs({
 
 /** Which project is transitioning (set before navigation, read on mount) */
 export const transitionProjectIdAtom = Atom.make<string | null>(null)
+
+let activeScrollHandler: (() => void) | null = null
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -80,14 +82,13 @@ function ProjectListPage({ userName }: { userName: string }) {
   const { projects, createProject, deleteProject } = useProjectIndex()
   const navigate = useNavigate()
   const [newName, setNewName] = useAtom(newNameAtom)
-  const scrollListenerRef = useRef<(() => void) | null>(null)
 
   // Restore scroll + attach save listener via ref callback
   const pageRefCallback = useCallback((el: HTMLDivElement | null) => {
     // Clean up previous listener
-    if (scrollListenerRef.current) {
-      window.removeEventListener("scroll", scrollListenerRef.current)
-      scrollListenerRef.current = null
+    if (activeScrollHandler) {
+      window.removeEventListener("scroll", activeScrollHandler)
+      activeScrollHandler = null
     }
     if (!el) return
 
@@ -100,7 +101,7 @@ function ProjectListPage({ userName }: { userName: string }) {
     // Save on scroll
     const handler = () => appRegistry.set(gridScrollAtom, window.scrollY)
     window.addEventListener("scroll", handler, { passive: true })
-    scrollListenerRef.current = handler
+    activeScrollHandler = handler
   }, [])
 
   const handleCreate = () => {
@@ -262,7 +263,7 @@ function ProjectCard({
         onMouseLeave={handleMouseLeave}
       >
         {displayHash ? (
-          <ThumbnailImage contentHash={displayHash} />
+          <ThumbnailImage contentHash={displayHash} slotKey={projectId} />
         ) : (
           <span className="text-xs text-muted-foreground">No preview</span>
         )}
@@ -309,15 +310,26 @@ function ProjectCard({
   )
 }
 
-function ThumbnailImage({ contentHash }: { contentHash: string }) {
+/** Persists the last loaded thumbnail URL per card, so scrubbing doesn't flash */
+const cardThumbUrlAtom = Atom.family((_slotKey: string) =>
+  Atom.make<string | undefined>(undefined),
+)
+
+function ThumbnailImage({ contentHash, slotKey }: { contentHash: string; slotKey: string }) {
   const result = useAtomValue(thumbnailAtom(contentHash))
   const url = Result.isSuccess(result) ? result.value : undefined
+  const [lastUrl, setLastUrl] = useAtom(cardThumbUrlAtom(slotKey))
 
-  if (!url) return null
+  if (url && url !== lastUrl) {
+    setLastUrl(url)
+  }
+
+  const displayUrl = url || lastUrl
+  if (!displayUrl) return null
 
   return (
     <img
-      src={url}
+      src={displayUrl}
       alt=""
       className="w-full h-full object-cover"
     />
