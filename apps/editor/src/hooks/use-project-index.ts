@@ -1,9 +1,9 @@
 import { Atom } from "@effect-atom/atom"
 import { useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
-import { ProjectIndexSchema, ProjectId, type ProjectMeta } from "@nur/core"
-import { createProjectDoc } from "@nur/core"
+import { ProjectIndexSchema, ProjectId, type ProjectMeta, createProjectDoc, makeYDocPersistence } from "@nur/core"
 import * as S from "effect/Schema"
+import * as Effect from "effect/Effect"
 import { appRegistry } from "../lib/atom-registry"
 import { createModuleLogger } from "../lib/logger"
 
@@ -32,8 +32,17 @@ function createProject(name: string): string {
     [id]: { id, name: trimmed, createdAt: now, updatedAt: now } as ProjectMeta,
   })
 
-  const { root: projectRoot } = createProjectDoc(id)
-  projectRoot.focus("name").syncSet(trimmed)
+  // Create doc, set name, persist initial state, then release scope
+  const { doc, root } = createProjectDoc(id)
+  root.focus("name").syncSet(trimmed)
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const persistence = yield* makeYDocPersistence(`nur-project-${id}`, doc)
+        yield* persistence.flush()
+      }),
+    ),
+  )
 
   return id
 }

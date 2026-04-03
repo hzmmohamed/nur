@@ -1,87 +1,168 @@
-import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
-import { useRef, useCallback } from "react"
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router"
+import { useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
 import { projectsAtom } from "../hooks/use-project-index"
 import {
-  projectReadyAtom,
+  activeProjectIdAtom,
+  activeEntryAtom,
   projectNameAtom,
   framesAtom,
   currentFrameAtom,
   setCurrentFrameAtom,
 } from "../lib/project-doc-atoms"
 import { FrameDropZone } from "../components/frame-drop-zone"
-import { FrameCanvas } from "../components/frame-canvas"
 import { Timeline } from "../components/timeline"
+import { EditorLayout } from "../components/editor-layout"
 import { importFnAtom, importProgressAtom } from "../lib/import-atoms"
-import {
-  registerHotkeyContext,
-  unregisterHotkeyContext,
-} from "../actors/hotkey-manager"
+import { canvasContainerAtom, canvasAtom } from "../lib/canvas-atom"
+import { appRegistry } from "../lib/atom-registry"
+import { registerHotkeyContext } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
-
-const canvasSizeAtom = Atom.make({ width: 0, height: 0 })
-const timelineWidthAtom = Atom.make(0)
+import { Spinner } from "@/components/ui/spinner"
+import {
+  setActiveToolAtom,
+  setActivePathIdAtom,
+} from "../lib/path-atoms"
+import { setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
+import { transitionProjectIdAtom } from "./index"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
 })
 
+// -- Hotkey registration --
+
+function setupEditorHotkeys() {
+  registerHotkeyContext({
+    id: "editor",
+    bindings: [
+      {
+        key: "ArrowRight",
+        handler: () => {
+          const framesResult = appRegistry.get(framesAtom) as any
+          const currentResult = appRegistry.get(currentFrameAtom) as any
+          const frames = framesResult?._tag === "Success" ? framesResult.value : []
+          const current = currentResult?._tag === "Success" ? currentResult.value : 0
+          appRegistry.set(setCurrentFrameAtom, Math.min(current + 1, frames.length - 1))
+        },
+      },
+      {
+        key: "ArrowLeft",
+        handler: () => {
+          const currentResult = appRegistry.get(currentFrameAtom) as any
+          const current = currentResult?._tag === "Success" ? currentResult.value : 0
+          appRegistry.set(setCurrentFrameAtom, Math.max(current - 1, 0))
+        },
+      },
+      {
+        key: "v",
+        handler: () => appRegistry.set(setActiveToolAtom, "select"),
+      },
+      {
+        key: "p",
+        handler: () => appRegistry.set(setActiveToolAtom, "pen"),
+      },
+      {
+        key: "Escape",
+        handler: () => {
+          appRegistry.set(setActivePathIdAtom, null)
+          appRegistry.set(setActiveLayerIdAtom, null)
+        },
+      },
+      {
+        key: "ctrl+0",
+        handler: () => {
+          appRegistry.set(setZoomAtom, 1)
+          appRegistry.set(resetViewSignalAtom, (appRegistry.get(resetViewSignalAtom) as number) + 1)
+        },
+        description: "Fit to frame",
+      },
+      {
+        key: "ctrl+1",
+        handler: () => appRegistry.set(setZoomAtom, 1),
+        description: "Zoom to 100%",
+      },
+    ],
+  })
+}
+
+// -- Hotkey setup atom (runs once) --
+const editorHotkeyAtom = Atom.make(() => {
+  setupEditorHotkeys()
+}).pipe(Atom.keepAlive)
+
 function ProjectEditorPage() {
   const { id } = Route.useParams()
   const projects = useAtomValue(projectsAtom)
+
+  // Set active project ID
+  appRegistry.set(activeProjectIdAtom, id)
 
   if (!(id in projects)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <h1 className="text-2xl font-bold">Project not found</h1>
-        <Button variant="link" asChild>
-          <Link to="/">Go to home</Link>
+        <Button variant="link" render={<Link to="/" />}>
+          Go to home
         </Button>
       </div>
     )
   }
 
-  const readyResult = useAtomValue(projectReadyAtom(id))
-  if (!Result.isSuccess(readyResult)) {
+  const entryResult = useAtomValue(activeEntryAtom)
+  if (!Result.isSuccess(entryResult)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+        <Spinner />
       </div>
     )
   }
 
-  return <ProjectEditor id={id} />
+  const projectMeta = projects[id]
+  return <ProjectEditor metaName={projectMeta?.name} lastModified={projectMeta?.updatedAt} />
 }
 
-function ProjectEditor({ id }: { id: string }) {
-  const nameResult = useAtomValue(projectNameAtom(id))
-  const name = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
+function ProjectEditor({ metaName, lastModified }: { metaName?: string; lastModified?: number }) {
+  const navigate = useNavigate()
+  const { id } = Route.useParams()
 
-  const framesResult = useAtomValue(framesAtom(id))
+  const handleBack = useCallback(() => {
+    appRegistry.set(transitionProjectIdAtom, id)
+    const nav = () => navigate({ to: "/", replace: true })
+    if (document.startViewTransition) {
+      document.startViewTransition(nav)
+    } else {
+      nav()
+    }
+  }, [navigate, id])
+
+  // -- Mount reactive atoms --
+  useAtomMount(canvasAtom)
+  useAtomMount(editorHotkeyAtom)
+
+  // -- Read-only atom values for rendering --
+  const nameResult = useAtomValue(projectNameAtom)
+  const docName = nameResult._tag === "Success" ? nameResult.value as string | undefined : undefined
+  const name = docName || metaName || "Untitled"
+
+  const framesResult = useAtomValue(framesAtom)
   const frames = framesResult._tag === "Success" ? framesResult.value : []
 
-  const currentFrameResult = useAtomValue(currentFrameAtom(id))
+  const currentFrameResult = useAtomValue(currentFrameAtom)
   const currentFrame = currentFrameResult._tag === "Success" ? currentFrameResult.value : 0
 
-  const triggerSetFrame = useAtomSet(setCurrentFrameAtom(id))
-
-  const mainRef = useRef<HTMLDivElement>(null)
-  const canvasSize = useAtomValue(canvasSizeAtom)
-  const timelineWidth = useAtomValue(timelineWidthAtom)
-  const timelineRef = useRef<HTMLDivElement>(null)
+  const triggerSetFrame = useAtomSet(setCurrentFrameAtom)
 
   const frameCount = frames.length
-  const currentFrameData = frames.find((f) => f.index === currentFrame)
 
-  // Import atoms
-  const importFn = importFnAtom(id)
-  const triggerImport = useAtomSet(importFn)
-  const importResult = useAtomValue(importFn)
-  const importProgress = useAtomValue(importProgressAtom(id))
+  // -- Import --
+  const triggerImport = useAtomSet(importFnAtom)
+  const importResult = useAtomValue(importFnAtom)
+  const importProgress = useAtomValue(importProgressAtom)
   const isImporting = Result.isWaiting(importResult)
 
-  // Block navigation while importing — confirm dialog + abort on proceed
   useBlocker({
     shouldBlockFn: () => {
       if (!isImporting) return false
@@ -93,104 +174,70 @@ function ProjectEditor({ id }: { id: string }) {
   })
 
   const handleFilesSelected = useCallback((files: FileList) => {
-    triggerImport({ files, projectId: id })
-  }, [triggerImport, id])
+    triggerImport(files)
+  }, [triggerImport])
 
-  // Canvas resize observer
-  const canvasResizeAtom = Atom.make((get) => {
-    const el = mainRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (entry) {
-        get.set(canvasSizeAtom, {
-          width: Math.floor(entry.contentRect.width),
-          height: Math.floor(entry.contentRect.height),
-        })
-      }
-    })
-    observer.observe(el)
-    get.addFinalizer(() => observer.disconnect())
-  })
-  useAtomMount(canvasResizeAtom)
-
-  // Timeline width observer
-  const timelineResizeAtom = Atom.make((get) => {
-    const el = timelineRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (entry) {
-        get.set(timelineWidthAtom, Math.floor(entry.contentRect.width))
-      }
-    })
-    observer.observe(el)
-    get.addFinalizer(() => observer.disconnect())
-  })
-  useAtomMount(timelineResizeAtom)
-
-  // Register hotkey context for arrow key navigation
-  const hotkeyAtom = Atom.make((get) => {
-    registerHotkeyContext({
-      id: "editor",
-      bindings: [
-        {
-          key: "ArrowRight",
-          handler: () => triggerSetFrame(Math.min(currentFrame + 1, frameCount - 1)),
-        },
-        {
-          key: "ArrowLeft",
-          handler: () => triggerSetFrame(Math.max(currentFrame - 1, 0)),
-        },
-      ],
-    })
-    get.addFinalizer(() => unregisterHotkeyContext("editor"))
-  })
-  useAtomMount(hotkeyAtom)
+  // -- Container ref callback writes to atom --
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    appRegistry.set(canvasContainerAtom, el)
+  }, [])
 
   return (
-    <div className="h-screen flex flex-col">
-      <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
-        <Button variant="link" asChild>
-          <Link to="/">Back</Link>
-        </Button>
-        <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
-        <p className="text-sm text-muted-foreground">
-          {frameCount} frames
-        </p>
-        {frameCount > 0 && (
-          <p className="text-sm text-muted-foreground">
-            Frame {currentFrame + 1} / {frameCount}
-          </p>
-        )}
-      </header>
-
-      <main ref={mainRef} className="flex-1 relative overflow-hidden">
-        {frameCount === 0 || isImporting ? (
-          <FrameDropZone
-            onFilesSelected={handleFilesSelected}
-            progress={importProgress}
-            isImporting={isImporting}
-          />
-        ) : (
-          <FrameCanvas
-            contentHash={currentFrameData?.contentHash}
-            width={canvasSize.width}
-            height={canvasSize.height}
-            frameWidth={currentFrameData?.width ?? 1}
-            frameHeight={currentFrameData?.height ?? 1}
-          />
-        )}
-      </main>
-
-      <div ref={timelineRef}>
+    <EditorLayout
+      header={
+        <header className="flex items-center gap-3 px-4 py-2 border-b border-border">
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleBack}>
+            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </Button>
+          <h1 className="text-sm font-semibold">{name}</h1>
+          <span className="text-xs text-muted-foreground">
+            {isImporting
+              ? `Importing ${importProgress.completed}/${importProgress.total}...`
+              : lastModified
+                ? `Saved ${formatRelativeTime(lastModified)}`
+                : "No changes"
+            }
+          </span>
+        </header>
+      }
+      canvas={
+        <div className="relative h-full overflow-hidden" style={{ viewTransitionName: "project-canvas" }}>
+          <div ref={containerRef} className="w-full h-full" />
+          {(frameCount === 0 || isImporting) && (
+            <div className="absolute inset-0">
+              <FrameDropZone
+                onFilesSelected={handleFilesSelected}
+                progress={importProgress}
+                isImporting={isImporting}
+              />
+            </div>
+          )}
+        </div>
+      }
+      timeline={
         <Timeline
-          frameCount={frameCount}
+          frames={frames}
           currentFrame={currentFrame}
           onFrameSelect={(index) => triggerSetFrame(index)}
-          width={timelineWidth}
+          lastModified={lastModified}
         />
-      </div>
-    </div>
+      }
+    />
   )
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 10) return "just now"
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return new Date(timestamp).toLocaleDateString()
 }

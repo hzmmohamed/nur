@@ -16,6 +16,9 @@ describe("AwarenessSchema", () => {
     handle.local.syncSet({
       currentFrame: 0,
       activeTool: "select",
+      activePathId: null,
+      activeLayerId: null,
+      drawingState: "idle",
       selection: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     })
@@ -31,6 +34,9 @@ describe("AwarenessSchema", () => {
     handle.local.syncSet({
       currentFrame: 0,
       activeTool: "select",
+      activePathId: null,
+      activeLayerId: null,
+      drawingState: "idle",
       selection: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     })

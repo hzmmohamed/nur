@@ -1,14 +1,13 @@
-import { Machine, State, Event } from "effect-machine/v3"
-import { Schema, Effect, Stream } from "effect"
 import { Atom } from "@effect-atom/atom"
-import * as MutableHashMap from "effect/MutableHashMap"
-import { BrowserStream } from "@effect/platform-browser"
-import { syncGet, syncSet } from "../lib/atom-registry"
+import { syncSet } from "../lib/atom-registry"
+import { createModuleLogger } from "../lib/logger"
+
+const hkLog = createModuleLogger("hotkey-manager")
 
 // -- Types --
 
 export interface HotkeyBinding {
-  readonly key: string // e.g. "ArrowRight", "ctrl+ArrowLeft", "ctrl+wheel"
+  readonly key: string // e.g. "ArrowRight", "ctrl+ArrowLeft"
   readonly handler: () => void
   readonly description?: string
 }
@@ -22,9 +21,14 @@ export interface HotkeyContext {
 
 export const activeContextIdAtom: Atom.Writable<string | null> = Atom.make<string | null>(null)
 
-// -- Internal registry --
+// -- Scope stack --
 
-const contexts = MutableHashMap.empty<string, HotkeyContext>()
+const scopeStack: HotkeyContext[] = []
+
+function getActiveBindings(): ReadonlyArray<HotkeyBinding> {
+  if (scopeStack.length === 0) return []
+  return scopeStack[scopeStack.length - 1].bindings
+}
 
 function parseKey(e: KeyboardEvent): string {
   const parts: Array<string> = []
@@ -35,79 +39,56 @@ function parseKey(e: KeyboardEvent): string {
   return parts.join("+")
 }
 
-function getActiveBindings(): ReadonlyArray<HotkeyBinding> {
-  const activeId = syncGet(activeContextIdAtom)
-  if (!activeId) return []
-  const ctx = MutableHashMap.get(contexts, activeId)
-  return ctx._tag === "Some" ? ctx.value.bindings : []
+// -- Registration functions --
+
+/** Push a hotkey context onto the stack. Only the top context's bindings are active. */
+export function pushHotkeyScope(context: HotkeyContext): void {
+  scopeStack.push(context)
+  syncSet(activeContextIdAtom, context.id)
+  hkLog.withContext({ contextId: context.id, stackDepth: scopeStack.length }).info("pushHotkeyScope")
 }
 
-// -- State --
+/** Pop the top hotkey context. Restores the previous context's bindings. */
+export function popHotkeyScope(): void {
+  const removed = scopeStack.pop()
+  const current = scopeStack.length > 0 ? scopeStack[scopeStack.length - 1] : null
+  syncSet(activeContextIdAtom, current?.id ?? null)
+  hkLog.withContext({ removedId: removed?.id, restoredId: current?.id, stackDepth: scopeStack.length }).info("popHotkeyScope")
+}
 
-const HotkeyState = State({
-  Running: {},
-})
-
-// -- Events --
-
-const HotkeyEvent = Event({
-  RegisterContext: { contextId: Schema.String },
-  UnregisterContext: { contextId: Schema.String },
-  SetFocus: { contextId: Schema.String },
-  ClearFocus: {},
-})
-
-export { HotkeyState, HotkeyEvent }
-
-// -- Registration functions --
-// Called before sending event, since Event can only carry serializable data.
-
+/** Replace the bottom scope (convenience for the base editor context). */
 export function registerHotkeyContext(context: HotkeyContext): void {
-  MutableHashMap.set(contexts, context.id, context)
+  // If the stack is empty or the bottom is the same id, replace it
+  if (scopeStack.length === 0) {
+    scopeStack.push(context)
+  } else if (scopeStack[0].id === context.id) {
+    scopeStack[0] = context
+  } else {
+    scopeStack.unshift(context)
+  }
+  if (scopeStack.length === 1) {
+    syncSet(activeContextIdAtom, context.id)
+  }
+  hkLog.withContext({ contextId: context.id, stackDepth: scopeStack.length }).info("registerHotkeyContext")
 }
 
 export function unregisterHotkeyContext(contextId: string): void {
-  MutableHashMap.remove(contexts, contextId)
-  const activeId = syncGet(activeContextIdAtom)
-  if (activeId === contextId) {
-    syncSet(activeContextIdAtom, null)
-  }
+  const idx = scopeStack.findIndex((c) => c.id === contextId)
+  if (idx >= 0) scopeStack.splice(idx, 1)
+  hkLog.withContext({ contextId, stackDepth: scopeStack.length }).info("unregisterHotkeyContext")
 }
 
-// -- Machine --
+// -- Global keydown listener (starts on module load) --
 
-export const hotkeyManagerMachine = Machine.make({
-  state: HotkeyState,
-  event: HotkeyEvent,
-  initial: HotkeyState.Running,
+hkLog.info("installing global keydown listener")
+
+window.addEventListener("keydown", (e) => {
+  const key = parseKey(e)
+  const bindings = getActiveBindings()
+  const binding = bindings.find((b) => b.key === key)
+  hkLog.withContext({ key, bindingCount: bindings.length, matched: !!binding }).debug("keydown")
+  if (binding) {
+    e.preventDefault()
+    binding.handler()
+  }
 })
-  .on(HotkeyState.Running, HotkeyEvent.RegisterContext, () => HotkeyState.Running)
-  .on(HotkeyState.Running, HotkeyEvent.UnregisterContext, () => HotkeyState.Running)
-  .on(HotkeyState.Running, HotkeyEvent.SetFocus, ({ event }) => {
-    syncSet(activeContextIdAtom, event.contextId)
-    return HotkeyState.Running
-  })
-  .on(HotkeyState.Running, HotkeyEvent.ClearFocus, () => {
-    syncSet(activeContextIdAtom, null)
-    return HotkeyState.Running
-  })
-  .background(() =>
-    Effect.gen(function* () {
-      const keydownStream = BrowserStream.fromEventListenerWindow("keydown")
-
-      yield* keydownStream.pipe(
-        Stream.runForEach((e) =>
-          Effect.sync(() => {
-            const key = parseKey(e)
-            const bindings = getActiveBindings()
-            const binding = bindings.find((b) => b.key === key)
-            if (binding) {
-              e.preventDefault()
-              binding.handler()
-            }
-          })
-        )
-      )
-    })
-  )
-  .build()

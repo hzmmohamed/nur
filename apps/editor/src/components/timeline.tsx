@@ -1,165 +1,467 @@
-import { useRef, useCallback } from "react"
-import { Atom } from "@effect-atom/atom"
-import { useAtom, useAtomMount } from "@effect-atom/atom-react/Hooks"
-import { Stage, Layer, Rect, Text, Line } from "react-konva"
+import { useRef, useCallback, useEffect } from "react"
+import { Atom, Result } from "@effect-atom/atom"
+import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { BrowserKeyValueStore } from "@effect/platform-browser"
+import * as S from "effect/Schema"
+import { appRegistry } from "../lib/atom-registry"
+import { layersAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { tokens } from "@/tokens"
+
+import type { Frame } from "@nur/core"
 
 interface TimelineProps {
-  frameCount: number
+  frames: Frame[]
   currentFrame: number
   onFrameSelect: (index: number) => void
-  width: number
+  lastModified?: number
 }
 
-const FRAME_CELL_BASE_WIDTH = 24
-const TIMELINE_HEIGHT = 64
-const HEADER_HEIGHT = 20
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 10) return "just now"
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return new Date(timestamp).toLocaleDateString()
+}
 
-const zoomLevelAtom = Atom.make(1)
+const CELL_W = tokens.timeline.cellBaseWidth
+const HEADER_H = tokens.timeline.headerHeight
+const ROW_H = 28
+const LABEL_W = 160
+
+const FPS = 24
+
+const timelineRuntime = Atom.runtime(BrowserKeyValueStore.layerLocalStorage)
+
+const zoomLevelAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-zoom",
+  schema: S.Number,
+  defaultValue: () => 1,
+}).pipe(Atom.keepAlive)
+
+const showTimeAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-show-time",
+  schema: S.Boolean,
+  defaultValue: () => false,
+}).pipe(Atom.keepAlive)
+
+const scrollPositionAtom = Atom.kvs({
+  runtime: timelineRuntime,
+  key: "nur-timeline-scroll",
+  schema: S.Struct({ x: S.Number, y: S.Number }),
+  defaultValue: () => ({ x: 0, y: 0 }),
+}).pipe(Atom.keepAlive)
+
 const isScrubbingAtom = Atom.make(false)
 
-function renderFrameCells(
-  frameCount: number,
-  currentFrame: number,
-  cellWidth: number,
-  zoomLevel: number,
-) {
-  const cells: Array<React.ReactElement> = []
-  const labelInterval = zoomLevel >= 1 ? 1 : zoomLevel >= 0.5 ? 5 : 10
+// -- Scrubbing --
 
-  for (let i = 0; i < frameCount; i++) {
-    const x = i * cellWidth
-    const isActive = i === currentFrame
+let scrubbingCallback: ((clientX: number) => void) | null = null
 
-    if (isActive) {
-      cells.push(
-        <Rect key={`bg-${i}`} x={x} y={HEADER_HEIGHT} width={cellWidth}
-          height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="rgba(59, 130, 246, 0.3)" />
-      )
-    }
-
-    cells.push(
-      <Line key={`border-${i}`} points={[x, HEADER_HEIGHT, x, TIMELINE_HEIGHT]}
-        stroke="#3f3f46" strokeWidth={1} />
-    )
-
-    if ((i + 1) % labelInterval === 0 || i === 0) {
-      cells.push(
-        <Text key={`label-${i}`} x={x} y={4} width={cellWidth}
-          text={`${i + 1}`} fontSize={10} fill="#a1a1aa" align="center" />
-      )
-    }
-
-    if (i > 0 && i % 10 === 0) {
-      cells.push(
-        <Rect key={`marker-${i}`} x={x} y={HEADER_HEIGHT}
-          width={1} height={TIMELINE_HEIGHT - HEADER_HEIGHT} fill="#71717a" />
-      )
-    }
-  }
-
-  if (currentFrame >= 0 && currentFrame < frameCount) {
-    cells.push(
-      <Rect key="playhead" x={currentFrame * cellWidth} y={0}
-        width={2} height={TIMELINE_HEIGHT} fill="#3b82f6" />
-    )
-  }
-
-  return cells
+function onScrubbingMouseMove(e: MouseEvent) {
+  scrubbingCallback?.(e.clientX)
+}
+function onScrubbingMouseUp() {
+  appRegistry.set(isScrubbingAtom, false)
+  document.removeEventListener("mousemove", onScrubbingMouseMove)
+  document.removeEventListener("mouseup", onScrubbingMouseUp)
 }
 
-export function Timeline(props: TimelineProps) {
-  const { frameCount, currentFrame, onFrameSelect, width } = props
-  const [zoomLevel, setZoomLevel] = useAtom(zoomLevelAtom)
-  const [isScrubbing, setIsScrubbing] = useAtom(isScrubbingAtom)
-  const containerRef = useRef<HTMLDivElement>(null)
+appRegistry.subscribe(isScrubbingAtom, (scrubbing) => {
+  if (scrubbing) {
+    document.addEventListener("mousemove", onScrubbingMouseMove)
+    document.addEventListener("mouseup", onScrubbingMouseUp)
+  }
+})
 
-  const cellWidth = FRAME_CELL_BASE_WIDTH * zoomLevel
-  const totalWidth = Math.max(frameCount * cellWidth, width)
+// -- Component --
+
+export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: TimelineProps) {
+  const frameCount = frames.length
+  const [zoomLevel] = useAtom(zoomLevelAtom)
+  const [showTime, setShowTime] = useAtom(showTimeAtom)
+  const layersResult = useAtomValue(layersAtom)
+  const layers = Result.isSuccess(layersResult) ? layersResult.value : []
+  const activeLayerIdResult = useAtomValue(activeLayerIdAtom)
+  const activeLayerId = Result.isSuccess(activeLayerIdResult) ? activeLayerIdResult.value : null
+  const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
+
+  const gridRef = useRef<HTMLDivElement>(null)
+  const labelRef = useRef<HTMLDivElement>(null)
+
+  const cellW = CELL_W * zoomLevel
+  const gridWidth = Math.max(frameCount * cellW, 200)
+  const bodyHeight = Math.max(layers.length * ROW_H, ROW_H)
+
+  // -- Scrubbing helpers --
 
   const positionToFrame = useCallback(
     (clientX: number): number => {
-      if (!containerRef.current) return 0
-      const rect = containerRef.current.getBoundingClientRect()
-      const x = clientX - rect.left + containerRef.current.scrollLeft
-      const frame = Math.floor(x / cellWidth)
-      return Math.max(0, Math.min(frame, frameCount - 1))
+      if (!gridRef.current) return 0
+      const rect = gridRef.current.getBoundingClientRect()
+      const x = clientX - rect.left + gridRef.current.scrollLeft
+      return Math.max(0, Math.min(Math.floor(x / cellW), frameCount - 1))
     },
-    [cellWidth, frameCount]
+    [cellW, frameCount],
   )
 
-  // Mouse down on stage
-  const handleMouseDown = useCallback(
+  const positionToLayerIndex = useCallback(
+    (clientY: number): number => {
+      if (!gridRef.current) return -1
+      const rect = gridRef.current.getBoundingClientRect()
+      const y = clientY - rect.top + gridRef.current.scrollTop - HEADER_H
+      if (y < 0) return -1
+      const idx = Math.floor(y / ROW_H)
+      return idx >= 0 && idx < layers.length ? idx : -1
+    },
+    [layers.length],
+  )
+
+  scrubbingCallback = (clientX: number) => {
+    onFrameSelect(positionToFrame(clientX))
+  }
+
+  // Single click — jump to frame
+  const handleGridClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0 || frameCount === 0) return
-      e.preventDefault()
-      setIsScrubbing(true)
       onFrameSelect(positionToFrame(e.clientX))
     },
-    [frameCount, onFrameSelect, positionToFrame, setIsScrubbing]
+    [frameCount, onFrameSelect, positionToFrame],
   )
 
-  // Global mouse events for scrubbing
-  const scrubbingListenerAtom = Atom.make((get) => {
-    const scrubbing = get(isScrubbingAtom)
-    if (!scrubbing) return
-
-    const handleMouseMove = (e: MouseEvent) => {
+  // Double click — jump to frame + enter edit mode (select layer)
+  const handleGridDblClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0 || frameCount === 0) return
       onFrameSelect(positionToFrame(e.clientX))
+      const layerIdx = positionToLayerIndex(e.clientY)
+      if (layerIdx >= 0 && layers[layerIdx]) {
+        setActiveLayerId(layers[layerIdx].id)
+      }
+    },
+    [frameCount, onFrameSelect, positionToFrame, positionToLayerIndex, layers, setActiveLayerId],
+  )
+
+  // Sync vertical scroll between label panel and grid + persist
+  const handleGridScroll = useCallback(() => {
+    if (gridRef.current && labelRef.current) {
+      labelRef.current.scrollTop = gridRef.current.scrollTop
+      appRegistry.set(scrollPositionAtom, {
+        x: gridRef.current.scrollLeft,
+        y: gridRef.current.scrollTop,
+      })
     }
-    const handleMouseUp = () => get.set(isScrubbingAtom, false)
+  }, [])
 
-    document.addEventListener("mousemove", handleMouseMove)
-    document.addEventListener("mouseup", handleMouseUp)
-    get.addFinalizer(() => {
-      document.removeEventListener("mousemove", handleMouseMove)
-      document.removeEventListener("mouseup", handleMouseUp)
-    })
-  })
-  useAtomMount(scrubbingListenerAtom)
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (gridRef.current) {
+      const saved = appRegistry.get(scrollPositionAtom)
+      gridRef.current.scrollLeft = saved.x
+      gridRef.current.scrollTop = saved.y
+      if (labelRef.current) {
+        labelRef.current.scrollTop = saved.y
+      }
+    }
+  }, [])
 
-  // Ctrl + scroll wheel zoom
-  const wheelZoomAtom = Atom.make((get) => {
-    const container = containerRef.current
-    if (!container) return
-
+  // Zoom with ctrl+scroll
+  const gridRefCallback = useCallback((el: HTMLDivElement | null) => {
+    ;(gridRef as any).current = el
+    if (!el) return
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
         e.preventDefault()
-        const prev = get.once(zoomLevelAtom)
+        const prev = appRegistry.get(zoomLevelAtom)
         const next = e.deltaY < 0
           ? Math.min(5, prev + 0.1)
           : Math.max(0.5, prev - 0.1)
-        get.set(zoomLevelAtom, parseFloat(next.toFixed(1)))
+        appRegistry.set(zoomLevelAtom, parseFloat(next.toFixed(1)))
       }
     }
-    container.addEventListener("wheel", handleWheel, { passive: false })
-    get.addFinalizer(() => container.removeEventListener("wheel", handleWheel))
-  })
-  useAtomMount(wheelZoomAtom)
+    el.addEventListener("wheel", handleWheel, { passive: false })
+  }, [])
 
-  // Render frame cells
-  const frameCells = renderFrameCells(frameCount, currentFrame, cellWidth, zoomLevel)
+  const handleZoomReset = useCallback(() => {
+    appRegistry.set(zoomLevelAtom, 1)
+  }, [])
 
-  if (frameCount === 0) {
+  const handleZoomSlider = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    appRegistry.set(zoomLevelAtom, parseFloat(e.target.value))
+  }, [])
+
+  if (frameCount === 0 && layers.length === 0) {
     return (
-      <div className="flex items-center px-4 py-2 border-t border-border min-h-16 bg-background">
+      <div className="flex items-center px-4 py-2 min-h-16 bg-background">
         <p className="text-muted-foreground text-sm">No frames imported</p>
       </div>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="border-t border-border overflow-x-auto overflow-y-hidden cursor-ew-resize bg-background"
-      onMouseDown={handleMouseDown}
-    >
-      <Stage width={totalWidth} height={TIMELINE_HEIGHT}>
-        <Layer>
-          <Rect x={0} y={0} width={totalWidth} height={TIMELINE_HEIGHT} fill="#18181b" />
-          {frameCells}
-        </Layer>
-      </Stage>
+    <div className="flex flex-col h-full bg-background">
+      {/* Main area: labels + grid */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left: layer labels */}
+        <div
+          ref={labelRef}
+          className="flex-shrink-0 overflow-hidden border-r border-border"
+          style={{ width: LABEL_W }}
+        >
+          {/* Header spacer */}
+          <div
+            className="flex items-center px-2 border-b border-border text-xs text-muted-foreground font-semibold"
+            style={{ height: HEADER_H }}
+          >
+            Layers
+          </div>
+
+        {/* Layer rows */}
+        <div className="overflow-y-hidden" style={{ height: `calc(100% - ${HEADER_H}px)` }}>
+          {layers.length === 0 ? (
+            <div className="flex items-center px-2 text-xs text-muted-foreground" style={{ height: ROW_H }}>
+              No layers
+            </div>
+          ) : (
+            layers.map((layer) => {
+              const isActive = layer.id === activeLayerId
+              return (
+                <div
+                  key={layer.id}
+                  className={`flex items-center gap-2 px-2 cursor-pointer transition-colors truncate ${
+                    isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                  }`}
+                  style={{ height: ROW_H }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setActiveLayerId(isActive ? null : layer.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      setActiveLayerId(isActive ? null : layer.id)
+                    }
+                  }}
+                >
+                  <div
+                    className="size-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: layer.color }}
+                  />
+                  <span className="text-xs truncate">{layer.name}</span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Right: frame grid */}
+      <div
+        ref={gridRefCallback}
+        className="flex-1 overflow-auto scrollbar-thin"
+        onClick={handleGridClick}
+        onDoubleClick={handleGridDblClick}
+        onScroll={handleGridScroll}
+      >
+        <svg
+          width={gridWidth}
+          height={HEADER_H + bodyHeight}
+          className="block"
+        >
+          {/* Background */}
+          <rect
+            x={0} y={0}
+            width={gridWidth} height={HEADER_H + bodyHeight}
+            fill={tokens.color.timeline.bg}
+          />
+
+          {/* Frame number header */}
+          {Array.from({ length: frameCount }, (_, i) => {
+            const x = i * cellW
+            const showLabel = zoomLevel >= 1 || (zoomLevel >= 0.5 ? (i + 1) % 5 === 0 || i === 0 : (i + 1) % 10 === 0 || i === 0)
+            return showLabel ? (
+              <text
+                key={`h-${i}`}
+                x={x + cellW / 2}
+                y={HEADER_H - 4}
+                textAnchor="middle"
+                fill={tokens.color.timeline.label}
+                fontSize={tokens.timeline.labelFontSize}
+              >
+                {showTime ? `${(i / FPS).toFixed(1)}s` : i + 1}
+              </text>
+            ) : null
+          })}
+
+          {/* Header separator */}
+          <line
+            x1={0} y1={HEADER_H}
+            x2={gridWidth} y2={HEADER_H}
+            stroke={tokens.color.timeline.grid}
+            strokeWidth={1}
+          />
+
+          {/* Grid lines (vertical) */}
+          {Array.from({ length: frameCount + 1 }, (_, i) => (
+            <line
+              key={`v-${i}`}
+              x1={i * cellW} y1={HEADER_H}
+              x2={i * cellW} y2={HEADER_H + bodyHeight}
+              stroke={tokens.color.timeline.grid}
+              strokeWidth={1}
+            />
+          ))}
+
+          {/* Grid lines (horizontal, per layer) */}
+          {layers.map((_, i) => (
+            <line
+              key={`h-${i}`}
+              x1={0} y1={HEADER_H + (i + 1) * ROW_H}
+              x2={gridWidth} y2={HEADER_H + (i + 1) * ROW_H}
+              stroke={tokens.color.timeline.grid}
+              strokeWidth={1}
+            />
+          ))}
+
+          {/* Hoverable frame slots */}
+          {layers.map((layer, layerIdx) => {
+            const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
+            return Array.from({ length: frameCount }, (_, frameIdx) => {
+              const x = frameIdx * cellW
+              const y = HEADER_H + layerIdx * ROW_H
+              const isCurrentFrame = frameIdx === currentFrame
+              const hasMask = maskFrameIds.has(frames[frameIdx]?.id ?? "")
+              return (
+                <g key={`slot-${layer.id}-${frameIdx}`}>
+                  {/* Hover target */}
+                  <rect
+                    x={x} y={y}
+                    width={cellW} height={ROW_H}
+                    fill={isCurrentFrame ? tokens.color.timeline.activeBg : "transparent"}
+                    className="timeline-slot"
+                    style={{ cursor: "pointer" }}
+                  />
+                  {/* Mask dot */}
+                  {hasMask && (
+                    <circle
+                      cx={x + cellW / 2}
+                      cy={y + ROW_H / 2}
+                      r={3}
+                      fill={layer.color}
+                      opacity={0.8}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
+                </g>
+              )
+            })
+          })}
+
+          {/* Active layer left indicator */}
+          {activeLayerId && (() => {
+            const layerIdx = layers.findIndex((l) => l.id === activeLayerId)
+            if (layerIdx < 0) return null
+            return (
+              <rect
+                x={0}
+                y={HEADER_H + layerIdx * ROW_H}
+                width={3}
+                height={ROW_H}
+                fill={tokens.color.timeline.playhead}
+                rx={1}
+              />
+            )
+          })()}
+
+          {/* Playhead */}
+          {currentFrame >= 0 && currentFrame < frameCount && (
+            <rect
+              x={currentFrame * cellW}
+              y={0}
+              width={tokens.timeline.playheadWidth}
+              height={HEADER_H + bodyHeight}
+              fill={tokens.color.timeline.playhead}
+            />
+          )}
+        </svg>
+      </div>
+      </div>
+
+      {/* Footer bar */}
+      <div className="flex items-center gap-3 px-3 py-1 border-t border-border text-xs text-muted-foreground flex-shrink-0">
+        {/* Frame stats */}
+        {frameCount > 0 && (
+          <>
+            <span className="tabular-nums">
+              {showTime
+                ? `${(currentFrame / FPS).toFixed(2)}s / ${(frameCount / FPS).toFixed(1)}s`
+                : `Frame ${currentFrame + 1} / ${frameCount}`
+              }
+            </span>
+            <button
+              onClick={() => setShowTime(!showTime)}
+              className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+              aria-label={showTime ? "Show frame numbers" : "Show timecodes"}
+              title={showTime ? "Show frame numbers" : "Show timecodes"}
+            >
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                {showTime ? (
+                  <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 12h8M12 8v8" /></>
+                ) : (
+                  <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>
+                )}
+              </svg>
+            </button>
+            <span className="text-border">·</span>
+            <span className="tabular-nums">
+              {(frameCount / FPS).toFixed(1)}s @{FPS}fps
+            </span>
+          </>
+        )}
+        {frameCount === 0 && <span>No frames</span>}
+
+        {lastModified && (
+          <>
+            <span className="text-border">·</span>
+            <span>Saved {formatRelativeTime(lastModified)}</span>
+          </>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Zoom controls */}
+        {frameCount > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomReset}
+              className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+            >
+              <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+              </svg>
+            </button>
+            <input
+              type="range"
+              min="0.5"
+              max="5"
+              step="0.1"
+              value={zoomLevel}
+              onChange={handleZoomSlider}
+              className="w-20 h-1 accent-muted-foreground cursor-pointer"
+              aria-label="Timeline zoom"
+            />
+            <span className="w-8 text-right tabular-nums">{Math.round(zoomLevel * 100)}%</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

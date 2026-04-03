@@ -2,6 +2,7 @@ import { useCallback } from "react"
 import { Atom } from "@effect-atom/atom"
 import { useAtom } from "@effect-atom/atom-react/Hooks"
 import type { ImportProgress } from "../lib/import-atoms"
+import { Spinner } from "@/components/ui/spinner"
 
 const dragOverAtom = Atom.make(false)
 
@@ -54,7 +55,7 @@ export function FrameDropZone(props: {
     >
       {props.isImporting ? (
         <>
-          <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full" />
+          <Spinner />
           <p className="text-muted-foreground">
             Importing frames... {props.progress.completed}/{props.progress.total}
           </p>

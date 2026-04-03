@@ -1,137 +1,137 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { createProjectDoc, createCurrentFrameIndex, ProjectId, type Frame } from "@nur/core"
-import { YAwareness } from "effect-yjs"
+import { createCurrentFrameIndex, ProjectId, ProjectDocSchema, type Frame, type AwarenessState } from "@nur/core"
+import { makeYDocPersistence, type YDocPersistence } from "@nur/core"
+import { YAwareness, YDocument, type YAwarenessHandle } from "effect-yjs"
 import { AwarenessSchema } from "@nur/core"
 import * as S from "effect/Schema"
 import * as Effect from "effect/Effect"
-import * as Cache from "effect/Cache"
-import * as Duration from "effect/Duration"
 import * as Layer from "effect/Layer"
+import * as Y from "yjs"
+import { createModuleLogger } from "./logger"
 
+const log = createModuleLogger("project-doc")
 const parseProjectId = S.decodeSync(ProjectId)
 
 // -- Types --
 
-interface ProjectDocEntry {
-  readonly root: ReturnType<typeof createProjectDoc>["root"]
-  readonly doc: ReturnType<typeof createProjectDoc>["doc"]
-  readonly persistence: ReturnType<typeof createProjectDoc>["persistence"]
-  readonly awareness: ReturnType<typeof createCurrentFrameIndex>
+export interface ProjectDocEntry {
+  readonly root: ReturnType<typeof YDocument.bind<typeof ProjectDocSchema.fields>>
+  readonly doc: Y.Doc
+  readonly persistence: YDocPersistence
+  readonly awareness: YAwarenessHandle<AwarenessState>
+  readonly currentFrameIndex: ReturnType<typeof createCurrentFrameIndex>
 }
 
 // -- Shared runtime --
 
 export const projectDocRuntime = Atom.runtime(Layer.empty)
 
-// -- Cache atom: effectful construction, one Y.Doc per project --
+// -- Active project --
 
-const projectDocCacheAtom = projectDocRuntime.atom(
-  Effect.gen(function* () {
-    return yield* Cache.make({
-      capacity: 64,
-      timeToLive: Duration.infinity,
-      lookup: (projectId: string) =>
-        Effect.sync(() => {
-          const id = parseProjectId(projectId)
-          const { doc, root, persistence } = createProjectDoc(id)
-          const awareness = YAwareness.make(AwarenessSchema, doc)
-          awareness.local.syncSet({
-            currentFrame: 0,
-            activeTool: "select",
-            selection: [],
-            viewport: { x: 0, y: 0, zoom: 1 },
-          })
-          const frameIndex = createCurrentFrameIndex(awareness)
-          return { root, doc, persistence, awareness: frameIndex } satisfies ProjectDocEntry
-        }),
-    })
-  }),
-).pipe(Atom.keepAlive)
+export const activeProjectIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
 
-// -- Effect-returning helpers --
+// -- Project doc entry: one per project, scoped persistence --
 
-/** Get a project doc entry from the cache. Returns Effect needing Atom.Context. */
-export const getProjectDoc = (projectId: string) =>
-  Effect.fnUntraced(function* (get: Atom.Context) {
-    const cache = yield* get.result(projectDocCacheAtom)
-    return yield* cache.get(projectId)
-  })
-
-/** Wait for persistence sync. Returns Effect needing Atom.Context. */
-export const syncProjectDoc = (projectId: string) =>
-  Effect.fnUntraced(function* (get: Atom.Context) {
-    const entry = yield* getProjectDoc(projectId)(get)
-    yield* Effect.promise(() => entry.persistence.sync())
-    return entry
-  })
-
-/** Flush Y.Doc state to IndexedDB. Returns Effect needing Atom.Context. */
-export const flushProjectDoc = (projectId: string) =>
-  Effect.fnUntraced(function* (get: Atom.Context) {
-    const entry = yield* getProjectDoc(projectId)(get)
-    yield* Effect.promise(() => entry.persistence.flush())
-  })
-
-// -- Shared entry atom per project (single cache lookup, shared across all derived atoms) --
-
-const projectDocEntryAtom = Atom.family((projectId: string) =>
-  projectDocRuntime.atom(getProjectDoc(projectId)),
-)
-
-// -- Atoms --
-
-/** Whether IndexedDB persistence has synced for this project's Y.Doc */
-export const projectReadyAtom = Atom.family((projectId: string) =>
+export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result<ProjectDocEntry>> = Atom.family((projectId: string) =>
   projectDocRuntime.atom(
-    syncProjectDoc(projectId),
-  ).pipe(Atom.mapResult(() => true)),
+    Effect.gen(function* () {
+        log.withContext({ projectId }).info("creating Y.Doc")
+        const id = parseProjectId(projectId)
+        const doc = new Y.Doc()
+
+        // Scoped persistence — hydrates doc from IndexedDB, attaches update handler
+        // Scope finalization detaches handler and closes db
+        const persistence = yield* makeYDocPersistence(`nur-project-${id}`, doc)
+
+        // Bind lens AFTER hydration — sees full Y.Doc state
+        const root = YDocument.bind(ProjectDocSchema, doc)
+
+        const rootMap = doc.getMap("root")
+        const rawFramesYMap = rootMap.get("frames")
+        const frameCount = rawFramesYMap instanceof Y.Map ? rawFramesYMap.size : 0
+        log.withContext({ projectId, frameCount, docStateSize: Y.encodeStateAsUpdate(doc).byteLength }).info("entry ready")
+
+        const awareness = YAwareness.make(AwarenessSchema, doc)
+        awareness.local.syncSet({
+          currentFrame: 0,
+          activeTool: "select",
+          activePathId: null,
+          activeLayerId: null,
+          drawingState: "idle",
+          selection: [],
+          viewport: { x: 0, y: 0, zoom: 1 },
+        })
+        const currentFrameIndex = createCurrentFrameIndex(awareness)
+
+        return { root, doc, persistence, awareness, currentFrameIndex } satisfies ProjectDocEntry
+    }),
+  ).pipe(Atom.keepAlive),
 )
+
+// -- Active project entry (reads activeProjectIdAtom) --
+
+export const activeEntryAtom = Atom.make((get): Result.Result<ProjectDocEntry> => {
+  const projectId = get(activeProjectIdAtom)
+  if (!projectId) return Result.initial() as Result.Result<ProjectDocEntry>
+  return get(projectDocEntryAtom(projectId))
+})
+
+// -- Derived atoms (scoped to active project) --
 
 /** Project name, reactive from Y.Doc */
-export const projectNameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
+export const projectNameAtom = (() => {
   let nameAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
+  let lastProjectId: string | null = null
   return Atom.make((get) => {
-    // Tracked get until entry resolves; once() after — entry value never changes
-    const result = nameAtom ? get.once(entryAtom) : get(entryAtom)
+    const projectId = get(activeProjectIdAtom)
+    if (projectId !== lastProjectId) {
+      nameAtom = undefined
+      lastProjectId = projectId
+    }
+    const result = get(activeEntryAtom)
     if (!Result.isSuccess(result)) return result
     if (!nameAtom) nameAtom = result.value.root.focus("name").atom()
     return Result.success(get(nameAtom) as string | undefined)
   })
-})
+})()
 
 /** Frames record from Y.Doc, sorted by index */
-export const framesAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
+export const framesAtom = (() => {
   let rawAtom: ReturnType<ReturnType<ProjectDocEntry["root"]["focus"]>["atom"]> | undefined
+  let lastProjectId: string | null = null
   return Atom.make((get) => {
-    const result = rawAtom ? get.once(entryAtom) : get(entryAtom)
-    if (!Result.isSuccess(result)) return result
-    if (!rawAtom) rawAtom = result.value.root.focus("frames").atom()
+    const projectId = get(activeProjectIdAtom)
+    if (projectId !== lastProjectId) {
+      rawAtom = undefined
+      lastProjectId = projectId
+    }
+    const result = get(activeEntryAtom)
+    if (!Result.isSuccess(result)) {
+      log.withContext({ projectId, tag: result._tag }).debug("framesAtom: entry not ready")
+      return result
+    }
+    if (!rawAtom) {
+      rawAtom = result.value.root.focus("frames").atom()
+      log.withContext({ projectId }).debug("framesAtom: created rawAtom")
+    }
     const record = (get(rawAtom) as Record<string, Frame> | undefined) ?? {}
-    return Result.success(Object.values(record).sort((a, b) => a.index - b.index))
+    const frames = Object.values(record).sort((a, b) => a.index - b.index)
+    log.withContext({ projectId, frameCount: frames.length }).debug("framesAtom: computed")
+    return Result.success(frames)
   })
-})
+})()
 
 /** Current frame index, reactive from YAwareness */
-export const currentFrameAtom = Atom.family((projectId: string) => {
-  const entryAtom = projectDocEntryAtom(projectId)
-  let awarenessAtom: Atom.Atom<unknown> | undefined
-  return Atom.make((get) => {
-    const result = awarenessAtom ? get.once(entryAtom) : get(entryAtom)
-    if (!Result.isSuccess(result)) return result
-    if (!awarenessAtom) awarenessAtom = result.value.awareness.atom
-    return Result.success(get(awarenessAtom) as number ?? 0)
-  })
+export const currentFrameAtom = Atom.make((get) => {
+  const result = get(activeEntryAtom)
+  if (!Result.isSuccess(result)) return result
+  return Result.success(get(result.value.currentFrameIndex.atom) as number ?? 0)
 })
 
-/** Setter for current frame — an atom fn that goes through the cache */
-export const setCurrentFrameAtom = Atom.family((projectId: string) =>
-  projectDocRuntime.fn(
-    Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
-      const cache = yield* get.result(projectDocCacheAtom)
-      const entry = yield* cache.get(projectId)
-      entry.awareness.set(index)
-    }),
-  ),
+/** Setter for current frame */
+export const setCurrentFrameAtom = projectDocRuntime.fn(
+  Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    entry.currentFrameIndex.set(index)
+  }),
 )
