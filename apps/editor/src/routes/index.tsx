@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { Atom } from "@effect-atom/atom"
+import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue } from "@effect-atom/atom-react/Hooks"
 import { useProjectIndex } from "../hooks/use-project-index"
 import { userProfileAtom } from "../lib/user-profile"
+import { thumbnailAtom } from "../lib/thumbnail-cache"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { appRegistry } from "../lib/atom-registry"
@@ -135,7 +136,8 @@ function ProjectListPage({ userName }: { userName: string }) {
                 key={project.id}
                 name={project.name}
                 updatedAt={project.updatedAt}
-                frameCount={0}
+                frameCount={(project as any).frameCount ?? 0}
+                frameHashes={(project as any).frameHashes ?? []}
                 onClick={() => navigate({ to: "/project/$id", params: { id: project.id } })}
                 onDelete={() => deleteProject(project.id)}
               />
@@ -149,19 +151,44 @@ function ProjectListPage({ userName }: { userName: string }) {
 
 // -- Project Card --
 
+const hoverFrameIndexAtom = Atom.make<{ projectId: string; index: number } | null>(null)
+
 function ProjectCard({
   name,
   updatedAt,
   frameCount,
+  frameHashes,
   onClick,
   onDelete,
 }: {
   name: string
   updatedAt: number
   frameCount: number
+  frameHashes: string[]
   onClick: () => void
   onDelete: () => void
 }) {
+  const hoverState = useAtomValue(hoverFrameIndexAtom)
+
+  // Determine which frame to show
+  const displayIndex = hoverState && frameHashes.length > 0
+    ? Math.min(hoverState.index, frameHashes.length - 1)
+    : 0
+  const displayHash = frameHashes[displayIndex]
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (frameHashes.length <= 1) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const ratio = x / rect.width
+    const index = Math.floor(ratio * frameHashes.length)
+    appRegistry.set(hoverFrameIndexAtom, { projectId: name, index })
+  }
+
+  const handleMouseLeave = () => {
+    appRegistry.set(hoverFrameIndexAtom, null)
+  }
+
   return (
     <div
       className="group rounded-lg border border-border bg-card overflow-hidden cursor-pointer transition-colors hover:border-muted-foreground/30"
@@ -177,12 +204,29 @@ function ProjectCard({
       }}
     >
       {/* Thumbnail area */}
-      <div className="aspect-video bg-muted/30 flex items-center justify-center relative">
-        <span className="text-xs text-muted-foreground">No preview</span>
+      <div
+        className="aspect-video bg-muted/30 flex items-center justify-center relative overflow-hidden"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        {displayHash ? (
+          <ThumbnailImage contentHash={displayHash} />
+        ) : (
+          <span className="text-xs text-muted-foreground">No preview</span>
+        )}
         {frameCount > 0 && (
           <span className="absolute bottom-2 right-2 text-xs bg-background/80 backdrop-blur-sm px-1.5 py-0.5 rounded tabular-nums">
             {frameCount} frames
           </span>
+        )}
+        {/* Scrub progress indicator */}
+        {hoverState && frameHashes.length > 1 && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-muted">
+            <div
+              className="h-full bg-foreground/50 transition-all duration-75"
+              style={{ width: `${((displayIndex + 1) / frameHashes.length) * 100}%` }}
+            />
+          </div>
         )}
       </div>
 
@@ -210,6 +254,23 @@ function ProjectCard({
         </Button>
       </div>
     </div>
+  )
+}
+
+function ThumbnailImage({ contentHash }: { contentHash: string }) {
+  const result = useAtomValue(thumbnailAtom(contentHash))
+  const url = Result.isSuccess(result) ? result.value : undefined
+
+  if (!url) {
+    return <span className="text-xs text-muted-foreground">Loading...</span>
+  }
+
+  return (
+    <img
+      src={url}
+      alt=""
+      className="w-full h-full object-cover"
+    />
   )
 }
 

@@ -6,7 +6,8 @@ import { FrameId } from "@nur/core"
 import * as S from "effect/Schema"
 import { AppBlobStore } from "./blob-store-layer"
 import { appRegistry } from "./atom-registry"
-import { activeEntryAtom } from "./project-doc-atoms"
+import { activeEntryAtom, activeProjectIdAtom } from "./project-doc-atoms"
+import { projectsAtom } from "../hooks/use-project-index"
 
 // -- Helpers --
 
@@ -90,6 +91,27 @@ export const importFnAtom = storageRuntime.fn(
 
     appRegistry.set(importProgressAtom, { total: sorted.length, completed: sorted.length, currentFile: "" })
     yield* entry.persistence.flush()
+
+    // Update project meta with frame count and hashes for thumbnails
+    const projectId = appRegistry.get(activeProjectIdAtom)
+    if (projectId) {
+      const allFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
+      const sortedFrames = Object.values(allFrames).sort((a, b) => a.index - b.index)
+      const currentMeta = appRegistry.get(projectsAtom)
+      const meta = currentMeta[projectId]
+      if (meta) {
+        appRegistry.set(projectsAtom, {
+          ...currentMeta,
+          [projectId]: {
+            ...meta,
+            updatedAt: Date.now(),
+            frameCount: sortedFrames.length,
+            frameHashes: sortedFrames.map((f) => f.contentHash),
+          },
+        })
+      }
+    }
+
     return frames
   }),
 )
