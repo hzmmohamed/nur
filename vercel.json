@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm turbo build --filter=@nur/editor",
+  "outputDirectory": "apps/editor/dist",
+  "installCommand": "pnpm install",
+  "framework": "vite"
+}
