@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect"
 import { Atom } from "@effect-atom/atom"
-import { BlobStore } from "@nur/object-store"
+import { ImageStore } from "@nur/object-store"
 import { sortFramesByName, type Frame } from "@nur/core"
 import { FrameId } from "@nur/core"
 import * as S from "effect/Schema"
@@ -56,7 +56,7 @@ export const importFnAtom = storageRuntime.fn(
     const entry = yield* get.result(activeEntryAtom)
     const framesRecord = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, Frame>
     const startIndex = Object.keys(framesRecord).length
-    const store = yield* BlobStore
+    const imageStore = yield* ImageStore
 
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"))
     if (imageFiles.length === 0) return []
@@ -75,7 +75,7 @@ export const importFnAtom = storageRuntime.fn(
       )
 
       const data = new Uint8Array(buffer)
-      const contentHash = yield* store.put(data)
+      const contentHash = yield* imageStore.putImage(data)
       const id = makeFrameId(crypto.randomUUID())
       const frame: Frame = {
         id,
