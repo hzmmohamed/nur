@@ -3,7 +3,6 @@ import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   activeLayerAtom,
   setActiveLayerIdAtom,
-  discardCurrentMaskAtom,
 } from "../lib/layer-atoms"
 import {
   activeToolAtom,
@@ -12,8 +11,8 @@ import {
   setDrawingStateAtom,
 } from "../lib/path-atoms"
 import { currentFrameAtom } from "../lib/project-doc-atoms"
-import { pushHotkeyScope, popHotkeyScope } from "../actors/hotkey-manager"
-import { appRegistry } from "../lib/atom-registry"
+import { pushHotkeyScope } from "../actors/hotkey-manager"
+import { commitNewMask, discardNewMask } from "../lib/drawing-actions"
 import { Button } from "@/components/ui/button"
 
 export function CanvasBar() {
@@ -22,13 +21,12 @@ export function CanvasBar() {
   const currentFrameResult = useAtomValue(currentFrameAtom) as Result.Result<number>
   const currentFrame = Result.isSuccess(currentFrameResult) ? currentFrameResult.value : 0
   const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
-  const toolResult = useAtomValue(activeToolAtom)
-  const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
   const setTool = useAtomSet(setActiveToolAtom)
   const drawingResult = useAtomValue(drawingStateAtom)
   const drawingState = Result.isSuccess(drawingResult) ? drawingResult.value : "idle"
   const setDrawingState = useAtomSet(setDrawingStateAtom)
-  const discardMask = useAtomSet(discardCurrentMaskAtom)
+  const toolResult = useAtomValue(activeToolAtom)
+  const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
 
   const isDrawing = drawingState !== "idle"
   const isClosed = drawingState === "closed"
@@ -63,11 +61,7 @@ export function CanvasBar() {
                 size="sm"
                 className="h-6 px-2 text-xs gap-1"
                 disabled={!isClosed}
-                onClick={() => {
-                  popHotkeyScope()
-                  setDrawingState("idle")
-                  setTool("select")
-                }}
+                onClick={commitNewMask}
                 title={isClosed ? "Commit mask" : "Close the path by clicking the first point"}
               >
                 <CheckIcon className="size-3" />
@@ -78,12 +72,7 @@ export function CanvasBar() {
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs gap-1 text-destructive-foreground"
-                onClick={() => {
-                  popHotkeyScope()
-                  discardMask()
-                  setDrawingState("idle")
-                  setTool("select")
-                }}
+                onClick={discardNewMask}
                 title="Discard this path"
               >
                 <CloseIcon className="size-3" />
@@ -102,7 +91,7 @@ export function CanvasBar() {
                 Edit Mask
               </Button>
               <Button
-                variant={activeTool === "pen" ? "secondary" : "ghost"}
+                variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs"
                 onClick={() => {
@@ -111,15 +100,7 @@ export function CanvasBar() {
                   pushHotkeyScope({
                     id: "drawing",
                     bindings: [
-                      {
-                        key: "Escape",
-                        handler: () => {
-                          popHotkeyScope()
-                          appRegistry.set(discardCurrentMaskAtom, undefined)
-                          appRegistry.set(setDrawingStateAtom, "idle")
-                          appRegistry.set(setActiveToolAtom, "select")
-                        },
-                      },
+                      { key: "Escape", handler: discardNewMask },
                     ],
                   })
                 }}

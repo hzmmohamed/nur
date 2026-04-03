@@ -8,6 +8,7 @@ import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
 import { BezierPath } from "./canvas-objects/bezier-curve"
 import { appRegistry } from "./atom-registry"
+import { stagePositionAtom, stageSizeAtom } from "../components/canvas-minimap"
 import { createModuleLogger } from "./logger"
 import type { Frame } from "@nur/core"
 
@@ -67,6 +68,7 @@ export const canvasAtom = Atom.make((get) => {
     const h = Math.floor(entry.contentRect.height)
     stage.width(w)
     stage.height(h)
+    appRegistry.set(stageSizeAtom, { w, h })
     updateImageTransform()
   })
   resizeObserver.observe(container)
@@ -268,6 +270,7 @@ export const canvasAtom = Atom.make((get) => {
     })
     // Update all paths to compensate for zoom
     MutableHashMap.forEach(paths, (bp) => bp.updateScale(zoom))
+    appRegistry.set(stagePositionAtom, { x: stage.x(), y: stage.y() })
     stage.batchDraw()
   })
 
@@ -275,6 +278,7 @@ export const canvasAtom = Atom.make((get) => {
   get.subscribe(resetViewSignalAtom, () => {
     stage.position({ x: 0, y: 0 })
     stage.offset({ x: 0, y: 0 })
+    appRegistry.set(stagePositionAtom, { x: 0, y: 0 })
     stage.batchDraw()
   })
 
@@ -422,10 +426,12 @@ export const canvasAtom = Atom.make((get) => {
     if (!isPanning || !panStart || !stageStartPos) return
     const dx = e.clientX - panStart.x
     const dy = e.clientY - panStart.y
-    stage.position({
+    const newPos = {
       x: stageStartPos.x + dx,
       y: stageStartPos.y + dy,
-    })
+    }
+    stage.position(newPos)
+    appRegistry.set(stagePositionAtom, newPos)
     stage.batchDraw()
   }
   const handlePanEnd = () => {

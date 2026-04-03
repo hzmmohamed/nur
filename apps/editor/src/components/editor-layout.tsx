@@ -6,6 +6,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable"
 import { CanvasBar } from "./canvas-bar"
+import { CanvasMinimap } from "./canvas-minimap"
 import { CanvasStatusBar } from "./canvas-status-bar"
 import { isEditModeAtom } from "../lib/layer-atoms"
 import { isDrawingAtom } from "../lib/path-atoms"
@@ -44,8 +45,9 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                   </div>
 
                   {/* Canvas content */}
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0 relative">
                     {canvas}
+                    <CanvasMinimap />
                   </div>
 
                   {/* Status bar */}
