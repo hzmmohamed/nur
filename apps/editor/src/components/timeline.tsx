@@ -127,14 +127,20 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     onFrameSelect(positionToFrame(clientX))
   }
 
-  const handleGridMouseDown = useCallback(
+  // Single click — jump to frame
+  const handleGridClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0 || frameCount === 0) return
-      e.preventDefault()
-      appRegistry.set(isScrubbingAtom, true)
       onFrameSelect(positionToFrame(e.clientX))
+    },
+    [frameCount, onFrameSelect, positionToFrame],
+  )
 
-      // Also select the layer row that was clicked
+  // Double click — jump to frame + enter edit mode (select layer)
+  const handleGridDblClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0 || frameCount === 0) return
+      onFrameSelect(positionToFrame(e.clientX))
       const layerIdx = positionToLayerIndex(e.clientY)
       if (layerIdx >= 0 && layers[layerIdx]) {
         setActiveLayerId(layers[layerIdx].id)
@@ -258,8 +264,9 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
       {/* Right: frame grid */}
       <div
         ref={gridRefCallback}
-        className="flex-1 overflow-auto cursor-ew-resize scrollbar-thin"
-        onMouseDown={handleGridMouseDown}
+        className="flex-1 overflow-auto scrollbar-thin"
+        onClick={handleGridClick}
+        onDoubleClick={handleGridDblClick}
         onScroll={handleGridScroll}
       >
         <svg
@@ -322,36 +329,41 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             />
           ))}
 
-          {/* Mask indicators (dots) */}
+          {/* Hoverable frame slots */}
           {layers.map((layer, layerIdx) => {
             const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
-            return frames.map((frame, frameIdx) => {
-              if (!maskFrameIds.has(frame.id)) return null
+            return Array.from({ length: frameCount }, (_, frameIdx) => {
+              const x = frameIdx * cellW
+              const y = HEADER_H + layerIdx * ROW_H
+              const isCurrentFrame = frameIdx === currentFrame
+              const hasMask = maskFrameIds.has(frames[frameIdx]?.id ?? "")
               return (
-                <circle
-                  key={`dot-${layer.id}-${frame.id}`}
-                  cx={frameIdx * cellW + cellW / 2}
-                  cy={HEADER_H + layerIdx * ROW_H + ROW_H / 2}
-                  r={3}
-                  fill={layer.color}
-                  opacity={0.8}
-                />
+                <g key={`slot-${layer.id}-${frameIdx}`}>
+                  {/* Hover target */}
+                  <rect
+                    x={x} y={y}
+                    width={cellW} height={ROW_H}
+                    fill={isCurrentFrame ? tokens.color.timeline.activeBg : "transparent"}
+                    className="timeline-slot"
+                    style={{ cursor: "pointer" }}
+                  />
+                  {/* Mask dot */}
+                  {hasMask && (
+                    <circle
+                      cx={x + cellW / 2}
+                      cy={y + ROW_H / 2}
+                      r={3}
+                      fill={layer.color}
+                      opacity={0.8}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
+                </g>
               )
             })
           })}
 
-          {/* Active frame highlight column */}
-          {currentFrame >= 0 && currentFrame < frameCount && (
-            <rect
-              x={currentFrame * cellW}
-              y={HEADER_H}
-              width={cellW}
-              height={bodyHeight}
-              fill={tokens.color.timeline.activeBg}
-            />
-          )}
-
-          {/* Active layer highlight row */}
+          {/* Active layer left indicator */}
           {activeLayerId && (() => {
             const layerIdx = layers.findIndex((l) => l.id === activeLayerId)
             if (layerIdx < 0) return null
@@ -359,9 +371,10 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
               <rect
                 x={0}
                 y={HEADER_H + layerIdx * ROW_H}
-                width={gridWidth}
+                width={3}
                 height={ROW_H}
-                fill={tokens.color.timeline.activeBg}
+                fill={tokens.color.timeline.playhead}
+                rx={1}
               />
             )
           })()}

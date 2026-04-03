@@ -46,6 +46,11 @@
   }
 }
 
+/* Timeline slot hover */
+.timeline-slot:hover {
+  fill: var(--color-neutral-800);
+}
+
 /* Subtle thin scrollbars */
 .scrollbar-thin {
   scrollbar-width: thin;
