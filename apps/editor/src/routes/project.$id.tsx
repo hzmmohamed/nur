@@ -178,7 +178,7 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
         </header>
       }
       canvas={
-        <div className="relative h-full overflow-hidden">
+        <div className="relative h-full overflow-hidden" style={{ viewTransitionName: "project-canvas" }}>
           <div ref={containerRef} className="w-full h-full" />
           {(frameCount === 0 || isImporting) && (
             <div className="absolute inset-0">

@@ -134,11 +134,20 @@ function ProjectListPage({ userName }: { userName: string }) {
             {projectList.map((project) => (
               <ProjectCard
                 key={project.id}
+                projectId={project.id}
                 name={project.name}
                 updatedAt={project.updatedAt}
                 frameCount={(project as any).frameCount ?? 0}
                 frameHashes={(project as any).frameHashes ?? []}
-                onClick={() => navigate({ to: "/project/$id", params: { id: project.id } })}
+                onClick={() => {
+                  appRegistry.set(transitionProjectIdAtom, project.id)
+                  const nav = () => navigate({ to: "/project/$id", params: { id: project.id } })
+                  if (document.startViewTransition) {
+                    document.startViewTransition(nav)
+                  } else {
+                    nav()
+                  }
+                }}
                 onDelete={() => deleteProject(project.id)}
               />
             ))}
@@ -153,7 +162,10 @@ function ProjectListPage({ userName }: { userName: string }) {
 
 const hoverFrameIndexAtom = Atom.make<{ projectId: string; index: number } | null>(null)
 
+const transitionProjectIdAtom = Atom.make<string | null>(null)
+
 function ProjectCard({
+  projectId,
   name,
   updatedAt,
   frameCount,
@@ -161,6 +173,7 @@ function ProjectCard({
   onClick,
   onDelete,
 }: {
+  projectId: string
   name: string
   updatedAt: number
   frameCount: number
@@ -169,6 +182,8 @@ function ProjectCard({
   onDelete: () => void
 }) {
   const hoverState = useAtomValue(hoverFrameIndexAtom)
+  const transitionId = useAtomValue(transitionProjectIdAtom)
+  const isTransitioning = transitionId === projectId
 
   // Determine which frame to show
   const displayIndex = hoverState && frameHashes.length > 0
@@ -206,6 +221,7 @@ function ProjectCard({
       {/* Thumbnail area */}
       <div
         className="aspect-video bg-muted/30 flex items-center justify-center relative overflow-hidden"
+        style={isTransitioning ? { viewTransitionName: "project-canvas" } : undefined}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       >

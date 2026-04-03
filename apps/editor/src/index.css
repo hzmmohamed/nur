@@ -46,6 +46,13 @@
   }
 }
 
+/* View Transitions */
+::view-transition-old(project-canvas),
+::view-transition-new(project-canvas) {
+  animation-duration: 250ms;
+  animation-timing-function: ease-out;
+}
+
 /* Timeline slot hover */
 .timeline-slot:hover {
   fill: var(--color-neutral-800);
