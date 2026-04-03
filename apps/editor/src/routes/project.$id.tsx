@@ -25,7 +25,7 @@ import {
   setActivePathIdAtom,
 } from "../lib/path-atoms"
 import { setActiveLayerIdAtom } from "../lib/layer-atoms"
-import { setZoomAtom } from "../lib/viewport-atoms"
+import { setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -72,7 +72,10 @@ function setupEditorHotkeys() {
       },
       {
         key: "ctrl+0",
-        handler: () => appRegistry.set(setZoomAtom, 1),
+        handler: () => {
+          appRegistry.set(setZoomAtom, 1)
+          appRegistry.set(resetViewSignalAtom, (appRegistry.get(resetViewSignalAtom) as number) + 1)
+        },
         description: "Fit to frame",
       },
       {

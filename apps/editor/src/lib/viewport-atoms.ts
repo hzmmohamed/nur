@@ -20,3 +20,9 @@ export const setZoomAtom = projectDocRuntime.fn(
     ;(entry.awareness.local.focus("viewport").focus("zoom") as any).syncSet(zoom)
   }),
 )
+
+/**
+ * Signal atom — increment to trigger a view reset (zoom 1 + center stage).
+ * The canvas-atom subscribes to this and resets position when it changes.
+ */
+export const resetViewSignalAtom = Atom.make(0)

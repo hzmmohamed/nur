@@ -4,7 +4,7 @@ import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
 import { activeToolAtom, activePathIdAtom, setActivePathIdAtom } from "./path-atoms"
 import { activeLayerIdAtom } from "./layer-atoms"
-import { zoomAtom, setZoomAtom } from "./viewport-atoms"
+import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
 import { BezierPath } from "./canvas-objects/bezier-curve"
 import { appRegistry } from "./atom-registry"
@@ -266,6 +266,13 @@ export const canvasAtom = Atom.make((get) => {
       x: (stageW / 2) * (1 - 1 / zoom),
       y: (stageH / 2) * (1 - 1 / zoom),
     })
+    stage.batchDraw()
+  })
+
+  // -- React to view reset signal — center stage --
+  get.subscribe(resetViewSignalAtom, () => {
+    stage.position({ x: 0, y: 0 })
+    stage.offset({ x: 0, y: 0 })
     stage.batchDraw()
   })
 

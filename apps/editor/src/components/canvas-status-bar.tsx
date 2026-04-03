@@ -2,7 +2,8 @@ import { Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { isEditModeAtom, activeLayerAtom } from "../lib/layer-atoms"
 import { activeToolAtom } from "../lib/path-atoms"
-import { zoomAtom, setZoomAtom } from "../lib/viewport-atoms"
+import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
+import { appRegistry } from "../lib/atom-registry"
 import { Button } from "@/components/ui/button"
 
 export function CanvasStatusBar() {
@@ -24,7 +25,10 @@ export function CanvasStatusBar() {
           variant="ghost"
           size="sm"
           className="h-5 px-1 text-xs text-muted-foreground"
-          onClick={() => setZoom(1)}
+          onClick={() => {
+          setZoom(1)
+          appRegistry.set(resetViewSignalAtom, (appRegistry.get(resetViewSignalAtom) as number) + 1)
+        }}
         >
           Fit
         </Button>
