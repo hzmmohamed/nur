@@ -189,14 +189,6 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     el.addEventListener("wheel", handleWheel, { passive: false })
   }, [])
 
-  if (frameCount === 0 && layers.length === 0) {
-    return (
-      <div className="flex items-center px-4 py-2 min-h-16 bg-background">
-        <p className="text-muted-foreground text-sm">No frames imported</p>
-      </div>
-    )
-  }
-
   const handleZoomReset = useCallback(() => {
     appRegistry.set(zoomLevelAtom, 1)
   }, [])
@@ -204,6 +196,14 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
   const handleZoomSlider = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     appRegistry.set(zoomLevelAtom, parseFloat(e.target.value))
   }, [])
+
+  if (frameCount === 0 && layers.length === 0) {
+    return (
+      <div className="flex items-center px-4 py-2 min-h-16 bg-background">
+        <p className="text-muted-foreground text-sm">No frames imported</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full bg-background">
