@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useCallback, useRef } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue } from "@effect-atom/atom-react/Hooks"
+import { BrowserKeyValueStore } from "@effect/platform-browser"
+import * as S from "effect/Schema"
 import { useProjectIndex } from "../hooks/use-project-index"
 import { userProfileAtom } from "../lib/user-profile"
 import { thumbnailAtom } from "../lib/thumbnail-cache"
@@ -8,8 +11,21 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { appRegistry } from "../lib/atom-registry"
 
+const homeRuntime = Atom.runtime(BrowserKeyValueStore.layerLocalStorage)
+
 const newNameAtom = Atom.make("")
 const onboardingNameAtom = Atom.make("")
+
+/** Persisted scroll position of the project grid */
+export const gridScrollAtom = Atom.kvs({
+  runtime: homeRuntime,
+  key: "nur-home-scroll",
+  schema: S.Number,
+  defaultValue: () => 0,
+}).pipe(Atom.keepAlive)
+
+/** Which project is transitioning (set before navigation, read on mount) */
+export const transitionProjectIdAtom = Atom.make<string | null>(null)
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -64,6 +80,28 @@ function ProjectListPage({ userName }: { userName: string }) {
   const { projects, createProject, deleteProject } = useProjectIndex()
   const navigate = useNavigate()
   const [newName, setNewName] = useAtom(newNameAtom)
+  const scrollListenerRef = useRef<(() => void) | null>(null)
+
+  // Restore scroll + attach save listener via ref callback
+  const pageRefCallback = useCallback((el: HTMLDivElement | null) => {
+    // Clean up previous listener
+    if (scrollListenerRef.current) {
+      window.removeEventListener("scroll", scrollListenerRef.current)
+      scrollListenerRef.current = null
+    }
+    if (!el) return
+
+    // Restore scroll position
+    const saved = appRegistry.get(gridScrollAtom)
+    if (saved > 0) {
+      requestAnimationFrame(() => window.scrollTo(0, saved))
+    }
+
+    // Save on scroll
+    const handler = () => appRegistry.set(gridScrollAtom, window.scrollY)
+    window.addEventListener("scroll", handler, { passive: true })
+    scrollListenerRef.current = handler
+  }, [])
 
   const handleCreate = () => {
     const trimmed = newName.trim()
@@ -78,7 +116,7 @@ function ProjectListPage({ userName }: { userName: string }) {
   )
 
   return (
-    <div className="min-h-screen">
+    <div ref={pageRefCallback} className="min-h-screen">
       {/* Header */}
       <header className="flex items-center justify-between px-8 py-4 border-b border-border">
         <h1 className="text-lg font-semibold">NUR</h1>
@@ -161,8 +199,6 @@ function ProjectListPage({ userName }: { userName: string }) {
 // -- Project Card --
 
 const hoverFrameIndexAtom = Atom.make<{ projectId: string; index: number } | null>(null)
-
-const transitionProjectIdAtom = Atom.make<string | null>(null)
 
 function ProjectCard({
   projectId,

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useBlocker } from "@tanstack/react-router"
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router"
 import { useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtomValue, useAtomSet, useAtomMount } from "@effect-atom/atom-react/Hooks"
@@ -26,6 +26,7 @@ import {
 } from "../lib/path-atoms"
 import { setActiveLayerIdAtom } from "../lib/layer-atoms"
 import { setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
+import { transitionProjectIdAtom } from "./index"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -124,6 +125,19 @@ function ProjectEditorPage() {
 }
 
 function ProjectEditor({ lastModified }: { lastModified?: number }) {
+  const navigate = useNavigate()
+  const { id } = Route.useParams()
+
+  const handleBack = useCallback(() => {
+    appRegistry.set(transitionProjectIdAtom, id)
+    const nav = () => navigate({ to: "/" })
+    if (document.startViewTransition) {
+      document.startViewTransition(nav)
+    } else {
+      nav()
+    }
+  }, [navigate, id])
+
   // -- Mount reactive atoms --
   useAtomMount(canvasAtom)
   useAtomMount(editorHotkeyAtom)
@@ -171,7 +185,7 @@ function ProjectEditor({ lastModified }: { lastModified?: number }) {
     <EditorLayout
       header={
         <header className="flex items-center gap-4 px-4 py-2 border-b border-border">
-          <Button variant="link" render={<Link to="/" />}>
+          <Button variant="link" onClick={handleBack}>
             Back
           </Button>
           <h1 className="text-lg font-semibold">{name || "Untitled"}</h1>
