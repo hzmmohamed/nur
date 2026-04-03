@@ -4,6 +4,7 @@ import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
 import { activeToolAtom, activePathIdAtom, setActivePathIdAtom } from "./path-atoms"
 import { activeLayerIdAtom } from "./layer-atoms"
+import { zoomAtom, setZoomAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
 import { BezierPath } from "./canvas-objects/bezier-curve"
 import { appRegistry } from "./atom-registry"
@@ -323,9 +324,22 @@ export const canvasAtom = Atom.make((get) => {
     isDraggingNewHandle = false
   })
 
+  // -- Ctrl+scroll zoom on canvas --
+  const handleWheel = (e: WheelEvent) => {
+    if (!e.ctrlKey) return
+    e.preventDefault()
+    const result = appRegistry.get(zoomAtom) as any
+    const current = result?._tag === "Success" ? result.value : 1
+    const delta = e.deltaY < 0 ? 0.1 : -0.1
+    const next = Math.max(0.1, Math.min(5, current + delta))
+    appRegistry.set(setZoomAtom, parseFloat(next.toFixed(2)))
+  }
+  container.addEventListener("wheel", handleWheel, { passive: false })
+
   // -- Cleanup --
   get.addFinalizer(() => {
     log.info("destroying Konva stage")
+    container.removeEventListener("wheel", handleWheel)
     imageUnsubscribe?.()
     disposeAllPaths()
     resizeObserver.disconnect()

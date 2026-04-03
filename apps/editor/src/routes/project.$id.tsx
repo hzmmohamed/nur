@@ -25,6 +25,7 @@ import {
   setActivePathIdAtom,
 } from "../lib/path-atoms"
 import { setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { setZoomAtom } from "../lib/viewport-atoms"
 
 export const Route = createFileRoute("/project/$id")({
   component: ProjectEditorPage,
@@ -68,6 +69,16 @@ function setupEditorHotkeys() {
           appRegistry.set(setActivePathIdAtom, null)
           appRegistry.set(setActiveLayerIdAtom, null)
         },
+      },
+      {
+        key: "ctrl+0",
+        handler: () => appRegistry.set(setZoomAtom, 1),
+        description: "Fit to frame",
+      },
+      {
+        key: "ctrl+1",
+        handler: () => appRegistry.set(setZoomAtom, 1),
+        description: "Zoom to 100%",
       },
     ],
   })
