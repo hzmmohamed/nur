@@ -9,3 +9,9 @@
 ## Architecture
 
 - [ ] **Model project states, not just data** — Guide the user through the project lifecycle with explicit states (empty → importing → editing → exporting) rather than deriving UI from raw data presence. Use effect-machine or awareness state to represent which phase the project is in, and render purpose-built UI for each phase
+
+
+## Other
+
+- [ ] PWA Setup
+- [ ] Responsive Tablet size friendly UI + touch screen support
