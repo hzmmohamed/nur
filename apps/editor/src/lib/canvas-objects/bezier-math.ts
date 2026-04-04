@@ -180,3 +180,88 @@ export function findNearestPointOnPath(
     updatedNextHandleIn,
   }
 }
+
+/**
+ * Compute the outward normal direction at a path vertex.
+ * Uses the average of the incoming and outgoing edge directions,
+ * rotated 90° (left normal for clockwise winding = outward).
+ */
+function vertexNormal(
+  prev: Point2D | null,
+  curr: Point2D,
+  next: Point2D | null,
+): Point2D {
+  let nx = 0, ny = 0
+
+  if (prev) {
+    const dx = curr.x - prev.x
+    const dy = curr.y - prev.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    nx += -dy / len
+    ny += dx / len
+  }
+
+  if (next) {
+    const dx = next.x - curr.x
+    const dy = next.y - curr.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    nx += -dy / len
+    ny += dx / len
+  }
+
+  const len = Math.sqrt(nx * nx + ny * ny) || 1
+  return { x: nx / len, y: ny / len }
+}
+
+/**
+ * Generate an outer path by offsetting each inner path point
+ * along its outward normal by `bufferDistance`.
+ *
+ * Handle angles are preserved. Handle distances are scaled by
+ * (1 + bufferDistance / avgEdgeLength) to approximate the offset curve.
+ */
+export function computeOuterPath(
+  innerPoints: ReadonlyArray<BezierPointData>,
+  bufferDistance: number,
+): BezierPointData[] {
+  if (innerPoints.length === 0) return []
+
+  // Compute average edge length for handle scaling
+  let totalLen = 0
+  for (let i = 1; i < innerPoints.length; i++) {
+    const dx = innerPoints[i].x - innerPoints[i - 1].x
+    const dy = innerPoints[i].y - innerPoints[i - 1].y
+    totalLen += Math.sqrt(dx * dx + dy * dy)
+  }
+  const avgEdgeLen = innerPoints.length > 1 ? totalLen / (innerPoints.length - 1) : 1
+  const handleScale = avgEdgeLen > 0 ? 1 + bufferDistance / avgEdgeLen : 1
+
+  const isClosed =
+    innerPoints.length >= 3 &&
+    innerPoints[0].x === innerPoints[innerPoints.length - 1].x &&
+    innerPoints[0].y === innerPoints[innerPoints.length - 1].y
+
+  return innerPoints.map((pt, i) => {
+    const prev = i > 0
+      ? innerPoints[i - 1]
+      : isClosed ? innerPoints[innerPoints.length - 2] : null
+    const next = i < innerPoints.length - 1
+      ? innerPoints[i + 1]
+      : isClosed ? innerPoints[1] : null
+
+    const normal = vertexNormal(
+      prev ? { x: prev.x, y: prev.y } : null,
+      { x: pt.x, y: pt.y },
+      next ? { x: next.x, y: next.y } : null,
+    )
+
+    return {
+      x: pt.x + normal.x * bufferDistance,
+      y: pt.y + normal.y * bufferDistance,
+      handleInAngle: pt.handleInAngle,
+      handleInDistance: pt.handleInDistance * handleScale,
+      handleOutAngle: pt.handleOutAngle,
+      handleOutDistance: pt.handleOutDistance * handleScale,
+    }
+  })
+}

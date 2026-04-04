@@ -1,11 +1,15 @@
 import { Result } from "@effect-atom/atom"
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   activeLayerAtom,
   setActiveLayerIdAtom,
   currentFrameHasMaskAtom,
   previousFrameMaskExistsAtom,
   copyMaskFromPreviousAtom,
+  editingPathTargetAtom,
+  editMaskModeAtom,
+  maskOuterModeAtom,
+  setOuterModeAtom,
 } from "../lib/layer-atoms"
 import {
   activeToolAtom,
@@ -23,6 +27,7 @@ import { Button } from "@/components/ui/button"
 const BAR_CLASS = "flex items-center gap-2 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border text-xs min-h-8"
 
 export function CanvasBar() {
+  // -- State reads --
   const activeLayerResult = useAtomValue(activeLayerAtom)
   const activeLayer = Result.isSuccess(activeLayerResult) ? activeLayerResult.value : null
 
@@ -30,9 +35,6 @@ export function CanvasBar() {
   const drawingState = Result.isSuccess(drawingResult) ? drawingResult.value : "idle"
   const isDrawing = drawingState !== "idle"
   const isClosed = drawingState === "closed"
-
-  const toolResult = useAtomValue(activeToolAtom)
-  const activeTool = Result.isSuccess(toolResult) ? toolResult.value : "select"
 
   const framesResult = useAtomValue(framesAtom)
   const frames = framesResult._tag === "Success" ? framesResult.value : []
@@ -44,9 +46,15 @@ export function CanvasBar() {
   const hasMask = useAtomValue(currentFrameHasMaskAtom)
   const hasPrevMask = useAtomValue(previousFrameMaskExistsAtom)
 
+  const [editMaskMode, setEditMaskMode] = useAtom(editMaskModeAtom)
+  const [editingTarget, setEditingTarget] = useAtom(editingPathTargetAtom)
+  const outerMode = useAtomValue(maskOuterModeAtom)
+  const triggerSetOuterMode = useAtomSet(setOuterModeAtom)
+
   const zoomResult = useAtomValue(zoomAtom)
   const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
 
+  // -- Setters --
   const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
   const setTool = useAtomSet(setActiveToolAtom)
   const setDrawingState = useAtomSet(setDrawingStateAtom)
@@ -56,7 +64,9 @@ export function CanvasBar() {
 
   const isEditing = !!activeLayer
 
-  // -- Drawing state --
+  // ============================================================
+  // State 1: New Mask mode (drawing)
+  // ============================================================
   if (isEditing && isDrawing) {
     return (
       <div className={BAR_CLASS}>
@@ -64,16 +74,18 @@ export function CanvasBar() {
         <LayerIndicator name={activeLayer.name} color={activeLayer.color} />
         <span className="text-muted-foreground">Drawing new mask</span>
         <div className="flex-1" />
-        <Button
-          variant={isClosed ? "default" : "ghost"}
-          size="sm"
-          className="h-6 px-2 text-xs gap-1"
-          disabled={!isClosed}
-          onClick={commitNewMask}
-          title={isClosed ? "Commit mask" : "Close the path first"}
-        >
-          <CheckIcon className="size-3" /> Done
-        </Button>
+        <span title={!isClosed ? "Close the path by clicking the first point" : undefined}>
+          <Button
+            variant={isClosed ? "default" : "ghost"}
+            size="sm"
+            className="h-6 px-2 text-xs gap-1"
+            disabled={!isClosed}
+            onClick={commitNewMask}
+            title={isClosed ? "Commit mask" : undefined}
+          >
+            <CheckIcon className="size-3" /> Done
+          </Button>
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -86,10 +98,80 @@ export function CanvasBar() {
     )
   }
 
-  // -- Editing state --
+  // ============================================================
+  // State 2: Edit Mask mode (editing existing mask paths)
+  // ============================================================
+  if (isEditing && editMaskMode && hasMask) {
+    return (
+      <div className={BAR_CLASS}>
+        <span className="font-semibold tabular-nums">F{currentFrame + 1}</span>
+        <LayerIndicator name={activeLayer.name} color={activeLayer.color} />
+
+        <span className="text-border mx-1">|</span>
+
+        {/* Uniform / Free toggle */}
+        <Button
+          variant={outerMode === "uniform" ? "secondary" : "ghost"}
+          size="sm" className="h-6 px-2 text-xs"
+          onClick={() => triggerSetOuterMode("uniform")}
+        >
+          Uniform
+        </Button>
+        <Button
+          variant={outerMode === "free" ? "secondary" : "ghost"}
+          size="sm" className="h-6 px-2 text-xs"
+          onClick={() => triggerSetOuterMode("free")}
+        >
+          Free
+        </Button>
+
+        {/* Inner / Outer toggle — only in Free mode */}
+        {outerMode === "free" && (
+          <>
+            <span className="text-border mx-1">|</span>
+            <Button
+              variant={editingTarget === "inner" ? "secondary" : "ghost"}
+              size="sm" className="h-6 px-2 text-xs"
+              onClick={() => setEditingTarget("inner")}
+            >
+              Inner
+            </Button>
+            <Button
+              variant={editingTarget === "outer" ? "secondary" : "ghost"}
+              size="sm" className="h-6 px-2 text-xs"
+              onClick={() => setEditingTarget("outer")}
+            >
+              Outer
+            </Button>
+          </>
+        )}
+
+        {outerMode === "uniform" && (
+          <span className="text-muted-foreground/60">Drag outer path to adjust buffer</span>
+        )}
+
+        <div className="flex-1" />
+
+        <Button
+          variant="ghost" size="sm" className="h-6 px-2 text-xs"
+          onClick={() => {
+            setEditMaskMode(false)
+            setEditingTarget("inner")
+          }}
+        >
+          <ChevronLeftIcon className="size-3" /> Back
+        </Button>
+      </div>
+    )
+  }
+
+  // ============================================================
+  // State 3: Base editing (layer selected, choose action)
+  // ============================================================
   if (isEditing) {
     return (
       <div className={BAR_CLASS}>
+        {/* Frame navigation */}
         <Button
           variant="ghost" size="sm" className="h-6 w-6 p-0"
           disabled={currentFrame <= 0}
@@ -112,26 +194,33 @@ export function CanvasBar() {
 
         <div className="flex-1" />
 
-        {hasMask ? (
+        {/* Contextual actions based on mask presence */}
+        {hasMask && (
           <Button
-            variant={activeTool === "select" ? "secondary" : "ghost"}
-            size="sm" className="h-6 px-2 text-xs"
-            onClick={() => setTool("select")}
+            variant="ghost" size="sm" className="h-6 px-2 text-xs"
+            onClick={() => {
+              setEditMaskMode(true)
+              setEditingTarget("inner")
+              setTool("select")
+            }}
           >
             Edit Mask
           </Button>
-        ) : hasPrevMask ? (
+        )}
+
+        {!hasMask && hasPrevMask && (
           <Button
             variant="ghost" size="sm" className="h-6 px-2 text-xs"
             onClick={() => copyFromPrev(undefined)}
           >
             Copy from Previous
           </Button>
-        ) : null}
+        )}
 
         <Button
           variant="ghost" size="sm" className="h-6 px-2 text-xs"
           onClick={() => {
+            setEditMaskMode(false)
             setTool("pen")
             setDrawingState("drawing")
             pushHotkeyScope({
@@ -145,7 +234,10 @@ export function CanvasBar() {
 
         <Button
           variant="ghost" size="sm" className="h-6 w-6 p-0"
-          onClick={() => setActiveLayerId(null)}
+          onClick={() => {
+            setActiveLayerId(null)
+            setEditMaskMode(false)
+          }}
           aria-label="Exit edit mode"
         >
           <CloseIcon className="size-3.5" />
@@ -154,7 +246,9 @@ export function CanvasBar() {
     )
   }
 
-  // -- Viewing state --
+  // ============================================================
+  // State 4: Viewing (no layer selected)
+  // ============================================================
   return (
     <div className={BAR_CLASS}>
       <span className="tabular-nums text-muted-foreground">
@@ -177,6 +271,8 @@ export function CanvasBar() {
   )
 }
 
+// -- Sub-components --
+
 function LayerIndicator({ name, color }: { name: string; color: string }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -185,6 +281,8 @@ function LayerIndicator({ name, color }: { name: string; color: string }) {
     </div>
   )
 }
+
+// -- Icons --
 
 function CheckIcon({ className }: { className?: string }) {
   return (

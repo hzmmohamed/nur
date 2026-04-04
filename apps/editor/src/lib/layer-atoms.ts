@@ -114,6 +114,12 @@ export const isEditModeAtom = Atom.make((get): boolean => {
   return Result.isSuccess(result) && result.value !== null
 })
 
+/** Which mask path is being edited: "inner" or "outer" */
+export const editingPathTargetAtom = Atom.make<"inner" | "outer">("inner")
+
+/** Whether we're in Edit Mask sub-mode (editing an existing mask's paths) */
+export const editMaskModeAtom = Atom.make<boolean>(false)
+
 /** Whether the active layer has a mask on the current frame */
 export const currentFrameHasMaskAtom = Atom.make((get): boolean => {
   const layerIdResult = get(activeLayerIdAtom)
@@ -166,6 +172,110 @@ export const previousFrameMaskExistsAtom = Atom.make((get): boolean => {
   const masks = (layer as any).masks ?? {}
   return prevFrame.id in masks
 })
+
+/** Buffer distance of the active mask on the current frame */
+export const maskBufferDistanceAtom = Atom.make((get): number => {
+  const layerIdResult = get(activeLayerIdAtom)
+  if (!Result.isSuccess(layerIdResult) || !layerIdResult.value) return 20
+  const layerId = layerIdResult.value
+
+  const layersResult = get(layersAtom)
+  if (!Result.isSuccess(layersResult)) return 20
+  const layer = layersResult.value.find((l) => l.id === layerId)
+  if (!layer) return 20
+
+  const framesResult = get(framesAtom)
+  if (!Result.isSuccess(framesResult)) return 20
+  const frames = framesResult.value
+
+  const currentResult = get(currentFrameAtom)
+  if (!Result.isSuccess(currentResult)) return 20
+  const currentIdx = currentResult.value as number
+
+  const frame = frames[currentIdx]
+  if (!frame) return 20
+
+  const masks = (layer as any).masks ?? {}
+  const mask = masks[frame.id]
+  return mask?.bufferDistance ?? 20
+})
+
+/** Outer mode of the active mask on the current frame */
+export const maskOuterModeAtom = Atom.make((get): "uniform" | "free" => {
+  const layerIdResult = get(activeLayerIdAtom)
+  if (!Result.isSuccess(layerIdResult) || !layerIdResult.value) return "uniform"
+  const layerId = layerIdResult.value
+
+  const layersResult = get(layersAtom)
+  if (!Result.isSuccess(layersResult)) return "uniform"
+  const layer = layersResult.value.find((l) => l.id === layerId)
+  if (!layer) return "uniform"
+
+  const framesResult = get(framesAtom)
+  if (!Result.isSuccess(framesResult)) return "uniform"
+  const frames = framesResult.value
+
+  const currentResult = get(currentFrameAtom)
+  if (!Result.isSuccess(currentResult)) return "uniform"
+  const currentIdx = currentResult.value as number
+
+  const frame = frames[currentIdx]
+  if (!frame) return "uniform"
+
+  const masks = (layer as any).masks ?? {}
+  const mask = masks[frame.id]
+  return mask?.outerMode ?? "uniform"
+})
+
+/** Set buffer distance on the current mask */
+export const setBufferDistanceAtom = projectDocRuntime.fn(
+  Effect.fnUntraced(function* (distance: number, get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    if (!activeLayerId) return
+
+    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
+    const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
+    const frame = frames[currentFrame] as { id: string } | undefined
+    if (!frame) return
+
+    const layersMap = entry.doc.getMap("root").get("layers") as any
+    if (!layersMap) return
+    const layerMap = layersMap.get(activeLayerId) as any
+    if (!layerMap) return
+    const masksMap = layerMap.get("masks") as any
+    if (!masksMap) return
+    const maskMap = masksMap.get(frame.id) as any
+    if (!maskMap) return
+    maskMap.set("bufferDistance", distance)
+  }),
+)
+
+/** Set outer mode on the current mask */
+export const setOuterModeAtom = projectDocRuntime.fn(
+  Effect.fnUntraced(function* (mode: "uniform" | "free", get: Atom.FnContext) {
+    const entry = yield* get.result(activeEntryAtom)
+    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    if (!activeLayerId) return
+
+    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
+    const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
+    const frame = frames[currentFrame] as { id: string } | undefined
+    if (!frame) return
+
+    const layersMap = entry.doc.getMap("root").get("layers") as any
+    if (!layersMap) return
+    const layerMap = layersMap.get(activeLayerId) as any
+    if (!layerMap) return
+    const masksMap = layerMap.get("masks") as any
+    if (!masksMap) return
+    const maskMap = masksMap.get(frame.id) as any
+    if (!maskMap) return
+    maskMap.set("outerMode", mode)
+  }),
+)
 
 // -- Helper: read current layerOrder from Y.Doc --
 
