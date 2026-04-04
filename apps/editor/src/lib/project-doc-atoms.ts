@@ -44,6 +44,7 @@ export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result
         const persistence = yield* makeYDocPersistence(`nur-project-${id}`, doc)
 
         // Bind lens AFTER hydration — sees full Y.Doc state
+        // focus() lazily creates missing Yjs structures for new schema fields
         const root = YDocument.bind(ProjectDocSchema, doc)
 
         const rootMap = doc.getMap("root")

@@ -206,13 +206,11 @@ function ProjectEditor({ metaName, lastModified }: { metaName?: string; lastModi
         <div className="relative h-full overflow-hidden" style={{ viewTransitionName: "project-canvas" }}>
           <div ref={containerRef} className="w-full h-full" />
           {(frameCount === 0 || isImporting) && (
-            <div className="absolute inset-0">
-              <FrameDropZone
-                onFilesSelected={handleFilesSelected}
-                progress={importProgress}
-                isImporting={isImporting}
-              />
-            </div>
+            <FrameDropZone
+              onFilesSelected={handleFilesSelected}
+              progress={importProgress}
+              isImporting={isImporting}
+            />
           )}
         </div>
       }

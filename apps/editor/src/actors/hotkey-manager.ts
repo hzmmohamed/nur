@@ -83,6 +83,16 @@ export function unregisterHotkeyContext(contextId: string): void {
 hkLog.info("installing global keydown listener")
 
 window.addEventListener("keydown", (e) => {
+  // Skip when typing in an input, textarea, or contenteditable
+  const el = document.activeElement
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    (el instanceof HTMLElement && el.isContentEditable)
+  ) {
+    return
+  }
+
   const key = parseKey(e)
   const bindings = getActiveBindings()
   const binding = bindings.find((b) => b.key === key)

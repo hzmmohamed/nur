@@ -8,8 +8,7 @@ import {
 import { CanvasBar } from "./canvas-bar"
 import { CanvasMinimap } from "./canvas-minimap"
 import { CanvasStatusBar } from "./canvas-status-bar"
-import { isEditModeAtom } from "../lib/layer-atoms"
-import { isDrawingAtom } from "../lib/path-atoms"
+import { panelsDisabledAtom } from "../lib/panel-atoms"
 import { LayersPanel } from "./panels/layers-panel"
 import { PropertiesPanel } from "./panels/properties-panel"
 
@@ -20,8 +19,7 @@ interface EditorLayoutProps {
 }
 
 export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
-  const isEditMode = useAtomValue(isEditModeAtom)
-  const isDrawing = useAtomValue(isDrawingAtom)
+  const panelsDisabled = useAtomValue(panelsDisabledAtom)
 
   return (
     <div className="h-screen flex flex-col">
@@ -35,14 +33,7 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
               {/* Canvas area */}
               <ResizablePanel defaultSize="70%" minSize="30%">
                 <div className="relative flex flex-col h-full overflow-hidden">
-                  {/* Canvas bar — slides down in Edit mode */}
-                  <div
-                    className={`transition-all duration-150 ease-out overflow-hidden ${
-                      isEditMode ? "max-h-10" : "max-h-0"
-                    }`}
-                  >
-                    <CanvasBar />
-                  </div>
+                  <CanvasBar />
 
                   {/* Canvas content */}
                   <div className="flex-1 min-h-0 relative">
@@ -66,7 +57,7 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                 collapsedSize="0%"
               >
                 <div className="relative flex flex-col h-full bg-background">
-                  {isDrawing && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
+                  {panelsDisabled && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
                   <div className="flex-1 overflow-y-auto scrollbar-thin">
                     <LayersPanel />
                   </div>
@@ -90,7 +81,7 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
           collapsedSize="0%"
         >
           <div className="relative h-full">
-            {isDrawing && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
+            {panelsDisabled && <div className="absolute inset-0 z-20 bg-background/60 pointer-events-auto" />}
             {timeline}
           </div>
         </ResizablePanel>

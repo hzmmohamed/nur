@@ -1,10 +1,17 @@
-import { useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
 import * as S from "effect/Schema"
 import { appRegistry } from "../lib/atom-registry"
-import { layersAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { layersAtom, layerGroupsAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { TimelineLayers, buildTree, expandedGroupIdsAtom, type LayerNodeData } from "./timeline-layers"
+import type { TreeNodeNested } from "@/lib/tree-types"
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable"
 import { tokens } from "@/tokens"
 
 import type { Frame } from "@nur/core"
@@ -31,7 +38,6 @@ function formatRelativeTime(timestamp: number): string {
 const CELL_W = tokens.timeline.cellBaseWidth
 const HEADER_H = tokens.timeline.headerHeight
 const ROW_H = 28
-const LABEL_W = 160
 
 const FPS = 24
 
@@ -80,6 +86,55 @@ appRegistry.subscribe(isScrubbingAtom, (scrubbing) => {
   }
 })
 
+interface GroupRowInfo {
+  visualRow: number
+  groupId: string  // actual group ID (without "group-" prefix)
+  isExpanded: boolean
+  childLayerIds: string[]  // all direct child layer IDs (for collapsed aggregation)
+}
+
+/**
+ * Walk the tree and compute { layerId -> visual row index }.
+ * Groups occupy a row but don't get a track. Collapsed groups hide their children.
+ */
+function computeVisualRowMap(
+  tree: TreeNodeNested<LayerNodeData>[],
+  expandedIds: string[],
+): { layerRows: Map<string, number>; groupRows: GroupRowInfo[]; totalRows: number } {
+  const expandedSet = new Set(expandedIds)
+  const layerRows = new Map<string, number>()
+  const groupRows: GroupRowInfo[] = []
+  let row = 0
+
+  function walk(nodes: TreeNodeNested<LayerNodeData>[]) {
+    for (const node of nodes) {
+      if (node.data.type === "group") {
+        const isExpanded = expandedSet.has(node.id)
+        const childLayerIds = (node.children ?? [])
+          .filter((c) => c.data.type === "layer")
+          .map((c) => c.data.layerId)
+        groupRows.push({
+          visualRow: row,
+          groupId: node.data.layerId,
+          isExpanded,
+          childLayerIds,
+        })
+        row++ // group header occupies a row
+        // Only recurse into children if group is expanded
+        if (isExpanded && node.children) {
+          walk(node.children)
+        }
+      } else {
+        layerRows.set(node.data.layerId, row)
+        row++
+      }
+    }
+  }
+
+  walk(tree)
+  return { layerRows, groupRows, totalRows: row }
+}
+
 // -- Component --
 
 export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: TimelineProps) {
@@ -88,16 +143,24 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
   const [showTime, setShowTime] = useAtom(showTimeAtom)
   const layersResult = useAtomValue(layersAtom)
   const layers = Result.isSuccess(layersResult) ? layersResult.value : []
+  const groupsResult = useAtomValue(layerGroupsAtom)
+  const groups = Result.isSuccess(groupsResult) ? groupsResult.value : []
   const activeLayerIdResult = useAtomValue(activeLayerIdAtom)
   const activeLayerId = Result.isSuccess(activeLayerIdResult) ? activeLayerIdResult.value : null
   const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
 
+  // Build tree and compute visual row positions (groups take rows but don't get tracks)
+  const expandedIds = useAtomValue(expandedGroupIdsAtom)
+  const treeItems = useMemo(() => buildTree(layers, groups), [layers, groups])
+  const { layerRows, groupRows, totalRows } = useMemo(() => computeVisualRowMap(treeItems, expandedIds), [treeItems, expandedIds])
+
   const gridRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
+  const [gridContainerHeight, setGridContainerHeight] = useState(200)
 
   const cellW = CELL_W * zoomLevel
   const gridWidth = Math.max(frameCount * cellW, 200)
-  const bodyHeight = Math.max(layers.length * ROW_H, ROW_H)
+  const bodyHeight = Math.max(totalRows * ROW_H, gridContainerHeight - HEADER_H, ROW_H)
 
   // -- Scrubbing helpers --
 
@@ -111,16 +174,25 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     [cellW, frameCount],
   )
 
-  const positionToLayerIndex = useCallback(
-    (clientY: number): number => {
-      if (!gridRef.current) return -1
+  // Reverse map: visual row index -> layer id
+  const rowToLayerId = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const [layerId, row] of layerRows) {
+      map.set(row, layerId)
+    }
+    return map
+  }, [layerRows])
+
+  const positionToLayerId = useCallback(
+    (clientY: number): string | null => {
+      if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
       const y = clientY - rect.top + gridRef.current.scrollTop - HEADER_H
-      if (y < 0) return -1
-      const idx = Math.floor(y / ROW_H)
-      return idx >= 0 && idx < layers.length ? idx : -1
+      if (y < 0) return null
+      const row = Math.floor(y / ROW_H)
+      return rowToLayerId.get(row) ?? null
     },
-    [layers.length],
+    [rowToLayerId],
   )
 
   scrubbingCallback = (clientX: number) => {
@@ -141,12 +213,12 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     (e: React.MouseEvent) => {
       if (e.button !== 0 || frameCount === 0) return
       onFrameSelect(positionToFrame(e.clientX))
-      const layerIdx = positionToLayerIndex(e.clientY)
-      if (layerIdx >= 0 && layers[layerIdx]) {
-        setActiveLayerId(layers[layerIdx].id)
+      const layerId = positionToLayerId(e.clientY)
+      if (layerId) {
+        setActiveLayerId(layerId)
       }
     },
-    [frameCount, onFrameSelect, positionToFrame, positionToLayerIndex, layers, setActiveLayerId],
+    [frameCount, onFrameSelect, positionToFrame, positionToLayerId, setActiveLayerId],
   )
 
   // Sync vertical scroll between label panel and grid + persist
@@ -176,6 +248,14 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
   const gridRefCallback = useCallback((el: HTMLDivElement | null) => {
     ;(gridRef as any).current = el
     if (!el) return
+
+    // Measure container height for full-height slots
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? 200
+      setGridContainerHeight(h)
+    })
+    observer.observe(el)
+
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
         e.preventDefault()
@@ -187,6 +267,12 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
       }
     }
     el.addEventListener("wheel", handleWheel, { passive: false })
+
+    // React 19 ref cleanup
+    return () => {
+      observer.disconnect()
+      el.removeEventListener("wheel", handleWheel)
+    }
   }, [])
 
   const handleZoomReset = useCallback(() => {
@@ -207,66 +293,24 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Main area: labels + grid */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left: layer labels */}
-        <div
-          ref={labelRef}
-          className="flex-shrink-0 overflow-hidden border-r border-border"
-          style={{ width: LABEL_W }}
-        >
-          {/* Header spacer */}
-          <div
-            className="flex items-center px-2 border-b border-border text-xs text-muted-foreground font-semibold"
-            style={{ height: HEADER_H }}
-          >
-            Layers
+      {/* Main area: layers + grid */}
+      <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0">
+        {/* Left: layer tree */}
+        <ResizablePanel defaultSize="20%" minSize="10%" maxSize="40%">
+          <div className="h-full overflow-hidden">
+            <TimelineLayers headerHeight={HEADER_H} scrollRef={labelRef} />
           </div>
+        </ResizablePanel>
 
-        {/* Layer rows */}
-        <div className="overflow-y-hidden" style={{ height: `calc(100% - ${HEADER_H}px)` }}>
-          {layers.length === 0 ? (
-            <div className="flex items-center px-2 text-xs text-muted-foreground" style={{ height: ROW_H }}>
-              No layers
-            </div>
-          ) : (
-            layers.map((layer) => {
-              const isActive = layer.id === activeLayerId
-              return (
-                <div
-                  key={layer.id}
-                  className={`flex items-center gap-2 px-2 cursor-pointer transition-colors truncate ${
-                    isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-                  }`}
-                  style={{ height: ROW_H }}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setActiveLayerId(isActive ? null : layer.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      setActiveLayerId(isActive ? null : layer.id)
-                    }
-                  }}
-                >
-                  <div
-                    className="size-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: layer.color }}
-                  />
-                  <span className="text-xs truncate">{layer.name}</span>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </div>
+        <ResizableHandle />
 
-      {/* Right: frame grid */}
-      <div
-        ref={gridRefCallback}
-        className="flex-1 overflow-auto scrollbar-thin"
-        onClick={handleGridClick}
-        onDoubleClick={handleGridDblClick}
+        {/* Right: frame grid */}
+        <ResizablePanel defaultSize="80%" minSize="40%">
+          <div
+            ref={gridRefCallback}
+            className="h-full overflow-auto scrollbar-thin"
+            onClick={handleGridClick}
+            onDoubleClick={handleGridDblClick}
         onScroll={handleGridScroll}
       >
         <svg
@@ -284,19 +328,36 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
           {/* Frame number header */}
           {Array.from({ length: frameCount }, (_, i) => {
             const x = i * cellW
+            const isCurrent = i === currentFrame
             const showLabel = zoomLevel >= 1 || (zoomLevel >= 0.5 ? (i + 1) % 5 === 0 || i === 0 : (i + 1) % 10 === 0 || i === 0)
-            return showLabel ? (
-              <text
-                key={`h-${i}`}
-                x={x + cellW / 2}
-                y={HEADER_H - 4}
-                textAnchor="middle"
-                fill={tokens.color.timeline.label}
-                fontSize={tokens.timeline.labelFontSize}
-              >
-                {showTime ? `${(i / FPS).toFixed(1)}s` : i + 1}
-              </text>
-            ) : null
+            if (showLabel) {
+              return (
+                <text
+                  key={`h-${i}`}
+                  x={x + cellW / 2}
+                  y={HEADER_H - 4}
+                  textAnchor="middle"
+                  fill={isCurrent ? tokens.color.timeline.playhead : tokens.color.timeline.label}
+                  fontSize={tokens.timeline.labelFontSize}
+                  fontWeight={isCurrent ? 700 : 400}
+                >
+                  {showTime ? `${(i / FPS).toFixed(1)}s` : i + 1}
+                </text>
+              )
+            }
+            // When label is hidden due to zoom, show a tiny tick for the current frame
+            if (isCurrent) {
+              return (
+                <circle
+                  key={`h-${i}`}
+                  cx={x + cellW / 2}
+                  cy={HEADER_H - 4}
+                  r={1.5}
+                  fill={tokens.color.timeline.playhead}
+                />
+              )
+            }
+            return null
           })}
 
           {/* Header separator */}
@@ -318,8 +379,30 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             />
           ))}
 
-          {/* Grid lines (horizontal, per layer) */}
-          {layers.map((_, i) => (
+          {/* Layer tracks background (distinct from empty space below) */}
+          {totalRows > 0 && (
+            <rect
+              x={0} y={HEADER_H}
+              width={gridWidth} height={totalRows * ROW_H}
+              fill="rgba(255,255,255,0.02)"
+            />
+          )}
+
+          {/* Group row backgrounds (dimmed) */}
+          {groupRows.map((gr) => (
+            <rect
+              key={`group-bg-${gr.groupId}`}
+              x={0}
+              y={HEADER_H + gr.visualRow * ROW_H}
+              width={gridWidth}
+              height={ROW_H}
+              fill="rgba(255,255,255,0.03)"
+              style={{ pointerEvents: "none" }}
+            />
+          ))}
+
+          {/* Grid lines (horizontal) — one per visual row (layers + groups) */}
+          {Array.from({ length: totalRows }, (_, i) => (
             <line
               key={`h-${i}`}
               x1={0} y1={HEADER_H + (i + 1) * ROW_H}
@@ -329,13 +412,14 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             />
           ))}
 
-          {/* Hoverable frame slots */}
-          {layers.map((layer, layerIdx) => {
+          {/* Frame-layer intersection slots (only for layer rows, not group rows) */}
+          {layers.map((layer) => {
+            const visualRow = layerRows.get(layer.id)
+            if (visualRow === undefined) return null
             const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
             return Array.from({ length: frameCount }, (_, frameIdx) => {
               const x = frameIdx * cellW
-              const y = HEADER_H + layerIdx * ROW_H
-              const isCurrentFrame = frameIdx === currentFrame
+              const y = HEADER_H + visualRow * ROW_H
               const hasMask = maskFrameIds.has(frames[frameIdx]?.id ?? "")
               return (
                 <g key={`slot-${layer.id}-${frameIdx}`}>
@@ -343,11 +427,11 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
                   <rect
                     x={x} y={y}
                     width={cellW} height={ROW_H}
-                    fill={isCurrentFrame ? tokens.color.timeline.activeBg : "transparent"}
+                    fill="transparent"
                     className="timeline-slot"
                     style={{ cursor: "pointer" }}
                   />
-                  {/* Mask dot */}
+                  {/* Mask dot — only when this layer has mask data on this frame */}
                   {hasMask && (
                     <circle
                       cx={x + cellW / 2}
@@ -363,14 +447,57 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             })
           })}
 
+          {/* Collapsed group slots — aggregate mask dots from child layers */}
+          {groupRows.filter((gr) => !gr.isExpanded).map((gr) => {
+            // Collect all mask frame IDs from child layers
+            const childLayers = gr.childLayerIds.map((id) => layers.find((l) => l.id === id)).filter(Boolean)
+            const masksByFrame = new Map<number, string[]>() // frameIdx -> [layer colors]
+            for (const layer of childLayers) {
+              const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
+              for (let fi = 0; fi < frameCount; fi++) {
+                if (maskFrameIds.has(frames[fi]?.id ?? "")) {
+                  if (!masksByFrame.has(fi)) masksByFrame.set(fi, [])
+                  masksByFrame.get(fi)!.push(layer!.color)
+                }
+              }
+            }
+
+            const y = HEADER_H + gr.visualRow * ROW_H
+            return Array.from({ length: frameCount }, (_, frameIdx) => {
+              const x = frameIdx * cellW
+              const colors = masksByFrame.get(frameIdx)
+              return (
+                <g key={`gslot-${gr.groupId}-${frameIdx}`}>
+                  <rect
+                    x={x} y={y}
+                    width={cellW} height={ROW_H}
+                    fill="transparent"
+                    className="timeline-slot"
+                    style={{ cursor: "default" }}
+                  />
+                  {colors && colors.length > 0 && (
+                    <circle
+                      cx={x + cellW / 2}
+                      cy={y + ROW_H / 2}
+                      r={3}
+                      fill={colors[0]}
+                      opacity={0.5}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
+                </g>
+              )
+            })
+          })}
+
           {/* Active layer left indicator */}
           {activeLayerId && (() => {
-            const layerIdx = layers.findIndex((l) => l.id === activeLayerId)
-            if (layerIdx < 0) return null
+            const visualRow = layerRows.get(activeLayerId)
+            if (visualRow === undefined) return null
             return (
               <rect
                 x={0}
-                y={HEADER_H + layerIdx * ROW_H}
+                y={HEADER_H + visualRow * ROW_H}
                 width={3}
                 height={ROW_H}
                 fill={tokens.color.timeline.playhead}
@@ -379,37 +506,38 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             )
           })()}
 
-          {/* Playhead */}
+          {/* Current frame column overlay */}
           {currentFrame >= 0 && currentFrame < frameCount && (
             <rect
-              x={currentFrame * cellW}
-              y={0}
-              width={tokens.timeline.playheadWidth}
-              height={HEADER_H + bodyHeight}
+              x={currentFrame * cellW} y={HEADER_H}
+              width={cellW} height={bodyHeight}
               fill={tokens.color.timeline.playhead}
+              opacity={0.08}
+              style={{ pointerEvents: "none" }}
             />
           )}
         </svg>
-      </div>
-      </div>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Footer bar */}
       <div className="flex items-center gap-3 px-3 py-1 border-t border-border text-xs text-muted-foreground flex-shrink-0">
         {/* Frame stats */}
         {frameCount > 0 && (
           <>
-            <span className="tabular-nums">
-              {showTime
-                ? `${(currentFrame / FPS).toFixed(2)}s / ${(frameCount / FPS).toFixed(1)}s`
-                : `Frame ${currentFrame + 1} / ${frameCount}`
-              }
-            </span>
             <button
               onClick={() => setShowTime(!showTime)}
-              className="p-0.5 rounded hover:bg-accent/50 transition-colors"
+              className="flex items-center gap-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors"
               aria-label={showTime ? "Show frame numbers" : "Show timecodes"}
               title={showTime ? "Show frame numbers" : "Show timecodes"}
             >
+              <span className="tabular-nums">
+                {showTime
+                  ? `${(currentFrame / FPS).toFixed(2)}s / ${(frameCount / FPS).toFixed(1)}s`
+                  : `Frame ${currentFrame + 1} / ${frameCount}`
+                }
+              </span>
               <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 {showTime ? (
                   <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 12h8M12 8v8" /></>

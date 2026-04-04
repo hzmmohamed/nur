@@ -18,3 +18,12 @@ export const LayerGroupSchema = S.Struct({
 })
 
 export type LayerGroup = S.Schema.Type<typeof LayerGroupSchema>
+
+/** Flat representation of layer tree order. Array position = visual order, parentId = nesting. */
+export const LayerOrderEntrySchema = S.Struct({
+  id: S.String,
+  type: S.Literal("layer", "group"),
+  parentId: S.NullOr(S.String),
+})
+
+export type LayerOrderEntry = S.Schema.Type<typeof LayerOrderEntrySchema>

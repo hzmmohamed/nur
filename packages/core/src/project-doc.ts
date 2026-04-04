@@ -1,7 +1,7 @@
 import * as S from "effect/Schema"
 import { YDocument } from "effect-yjs"
 import { FrameSchema } from "./schemas/frame"
-import { LayerSchema, LayerGroupSchema } from "./schemas/layer"
+import { LayerSchema, LayerGroupSchema, LayerOrderEntrySchema } from "./schemas/layer"
 import type { ProjectId } from "./schemas/ids"
 
 export const ProjectDocSchema = S.Struct({
@@ -9,6 +9,7 @@ export const ProjectDocSchema = S.Struct({
   frames: S.Record({ key: S.String, value: FrameSchema }),
   layers: S.Record({ key: S.String, value: LayerSchema }),
   layerGroups: S.Record({ key: S.String, value: LayerGroupSchema }),
+  layerOrder: S.Array(LayerOrderEntrySchema),
 })
 
 export type ProjectDoc = S.Schema.Type<typeof ProjectDocSchema>
