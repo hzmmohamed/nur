@@ -1,8 +1,8 @@
 import { Atom, Result } from "@effect-atom/atom"
-import { createCurrentFrameIndex, ProjectId, ProjectDocSchema, type Frame, type AwarenessState } from "@nur/core"
+import { ProjectId, ProjectDocSchema, type Frame } from "@nur/core"
 import { makeYDocPersistence, type YDocPersistence } from "@nur/core"
 import { YAwareness, YDocument, type YAwarenessHandle } from "effect-yjs"
-import { AwarenessSchema } from "@nur/core"
+import { AwarenessSchema, type AwarenessState } from "@nur/core"
 import * as S from "effect/Schema"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
@@ -19,7 +19,6 @@ export interface ProjectDocEntry {
   readonly doc: Y.Doc
   readonly persistence: YDocPersistence
   readonly awareness: YAwarenessHandle<AwarenessState>
-  readonly currentFrameIndex: ReturnType<typeof createCurrentFrameIndex>
 }
 
 // -- Shared runtime --
@@ -29,6 +28,19 @@ export const projectDocRuntime = Atom.runtime(Layer.empty)
 // -- Active project --
 
 export const activeProjectIdAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
+
+// -- Current frame index (local source of truth) --
+
+/** Current frame index — local writable source of truth */
+export const currentFrameRawAtom = Atom.make<number>(0)
+
+/** Current frame index (Result-wrapped for consumer compatibility) */
+export const currentFrameAtom = Atom.make((get): Result.Result<number> => {
+  return Result.success(get(currentFrameRawAtom))
+})
+
+/** Set current frame — alias for raw atom */
+export const setCurrentFrameAtom = currentFrameRawAtom
 
 // -- Project doc entry: one per project, scoped persistence --
 
@@ -53,7 +65,9 @@ export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result
         log.withContext({ projectId, frameCount, docStateSize: Y.encodeStateAsUpdate(doc).byteLength }).info("entry ready")
 
         const awareness = YAwareness.make(AwarenessSchema, doc)
-        awareness.local.syncSet({
+
+        // Broadcast initial state to peers
+        awareness.broadcast({
           currentFrame: 0,
           activeTool: "select",
           activePathId: null,
@@ -62,9 +76,8 @@ export const projectDocEntryAtom: (projectId: string) => Atom.Atom<Result.Result
           selection: [],
           viewport: { x: 0, y: 0, zoom: 1 },
         })
-        const currentFrameIndex = createCurrentFrameIndex(awareness)
 
-        return { root, doc, persistence, awareness, currentFrameIndex } satisfies ProjectDocEntry
+        return { root, doc, persistence, awareness } satisfies ProjectDocEntry
     }),
   ).pipe(Atom.keepAlive),
 )
@@ -121,18 +134,3 @@ export const framesAtom = (() => {
     return Result.success(frames)
   })
 })()
-
-/** Current frame index, reactive from YAwareness */
-export const currentFrameAtom = Atom.make((get) => {
-  const result = get(activeEntryAtom)
-  if (!Result.isSuccess(result)) return result
-  return Result.success(get(result.value.currentFrameIndex.atom) as number ?? 0)
-})
-
-/** Setter for current frame */
-export const setCurrentFrameAtom = projectDocRuntime.fn(
-  Effect.fnUntraced(function* (index: number, get: Atom.FnContext) {
-    const entry = yield* get.result(activeEntryAtom)
-    entry.currentFrameIndex.set(index)
-  }),
-)

@@ -2,7 +2,8 @@ import Konva from "konva"
 import { Atom, Result } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
-import { activeToolAtom, activePathIdAtom, setActivePathIdAtom, drawingStateAtom, setDrawingStateAtom } from "./path-atoms"
+import { activeToolAtom, activePathIdAtom, setActivePathIdAtom, drawingStateAtom } from "./path-atoms"
+import { canvasActor, CanvasEvent } from "./canvas-machine"
 import { activeLayerIdAtom, editMaskModeAtom, editingPathTargetAtom, setBufferDistanceAtom } from "./layer-atoms"
 import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
@@ -186,6 +187,7 @@ export const canvasAtom = Atom.make((get) => {
         outerLens,
         bufferDistance: maskData?.bufferDistance ?? 20,
         outerMode: maskData?.outerMode ?? "uniform",
+        maskLens,
       })
       bp.setActive(false)
       MutableHashMap.set(paths, pathKey, bp)
@@ -216,6 +218,7 @@ export const canvasAtom = Atom.make((get) => {
         bufferDistance: maskData?.bufferDistance ?? 20,
         outerMode: maskData?.outerMode ?? "uniform",
         onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+        maskLens,
       })
       bp.setActive(pathKey === activePathId)
       MutableHashMap.set(paths, pathKey, bp)
@@ -339,6 +342,9 @@ export const canvasAtom = Atom.make((get) => {
     })
   })
 
+  // Buffer distance and outer mode are subscribed to directly from Y.Doc
+  // inside each BezierPath instance via maskLens — no need for indirect subscription here.
+
   // -- React to edit mask mode changes — re-sync to show/hide point objects --
   get.subscribe(editMaskModeAtom, (inEditMaskMode) => {
     if (!inEditMaskMode && currentFrameId) {
@@ -410,6 +416,7 @@ export const canvasAtom = Atom.make((get) => {
         bufferDistance: 20,
         outerMode: "uniform",
         onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+        maskLens,
       })
       bp.setActive(true)
       MutableHashMap.set(paths, pathKey, bp)
@@ -435,7 +442,7 @@ export const canvasAtom = Atom.make((get) => {
       if (dist < closeThreshold) {
         // Close the path: append a point at exactly the first point's position
         bp.value.appendPoint(first.x, first.y)
-        appRegistry.set(setDrawingStateAtom, "closed")
+        canvasActor?.sendSync(CanvasEvent.ClosePath)
         return
       }
     }

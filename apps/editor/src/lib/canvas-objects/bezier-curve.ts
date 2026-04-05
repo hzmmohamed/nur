@@ -50,6 +50,8 @@ export interface BezierPathOptions {
   outerMode?: "uniform" | "free"
   /** Called when buffer distance changes via outer path drag (uniform mode) */
   onBufferChange?: (distance: number) => void
+  /** Mask struct lens — for subscribing to bufferDistance/outerMode changes from Y.Doc */
+  maskLens?: any
 }
 
 export class BezierPath {
@@ -79,6 +81,8 @@ export class BezierPath {
   private outerCurrentIds: HashSet.HashSet<string> = HashSet.empty()
   private unsubscribeOuterIds: (() => void) | null = null
   private readonly onBufferChange?: (distance: number) => void
+  private unsubscribeMaskFields: (() => void) | null = null
+  private maskLensRef: any = null
 
   constructor(lens: YLinkedListLens<BezierPointData>, layer: Konva.Layer, options?: BezierPathOptions) {
     this.lens = lens
@@ -235,6 +239,61 @@ export class BezierPath {
     this.startStructuralLoop()
     this.startPathRenderLoop()
     this.startOuterRenderLoop()
+    this.startMaskFieldSubscriptions(options?.maskLens)
+  }
+
+  /** Subscribe to bufferDistance and outerMode changes from the Y.Doc mask struct */
+  private startMaskFieldSubscriptions(maskLens: any): void {
+    if (!maskLens) return
+    this.maskLensRef = maskLens
+    try {
+      const bufferAtom = maskLens.focus("bufferDistance").atom()
+      const modeAtom = maskLens.focus("outerMode").atom()
+
+      const unsub1 = this.registry.subscribe(bufferAtom, (val: unknown) => {
+        const dist = typeof val === "number" ? val : 20
+        if (dist !== this.bufferDistance) {
+          this.bufferDistance = dist
+          if (this.outerMode === "uniform" && this.isClosed) {
+            this.rebuildOuterPath()
+          }
+        }
+      }, { immediate: true })
+
+      const unsub2 = this.registry.subscribe(modeAtom, (val: unknown) => {
+        const mode = val === "free" ? "free" as const : "uniform" as const
+        if (mode !== this.outerMode) {
+          this.outerMode = mode
+          if (mode === "uniform" && this.isClosed) {
+            this.rebuildOuterPath()
+          }
+        }
+      }, { immediate: true })
+
+      this.unsubscribeMaskFields = () => { unsub1(); unsub2() }
+    } catch {
+      // maskLens may not support focus on these fields yet (new mask)
+    }
+  }
+
+  /** Recompute and render the outer path without re-rendering the inner path */
+  private rebuildOuterPath(): void {
+    if (!this.outerLens || !this.isClosed) return
+    const points = this.lens.get()
+    if (this.outerMode === "uniform") {
+      const outerPoints = computeOuterPath(points, this.bufferDistance)
+      while (this.outerLens.length() > 0) {
+        this.outerLens.removeAt(0)
+      }
+      for (const pt of outerPoints) {
+        this.outerLens.append(pt)
+      }
+    }
+    const outerPoints = this.outerLens.get()
+    const outerSvg = buildSvgPathData(outerPoints)
+    this.outerPathLine.data(outerSvg)
+    this.outerPathLine.visible(true)
+    this.layer.batchDraw()
   }
 
   /** Update point/handle scale to compensate for stage zoom */
@@ -830,6 +889,7 @@ export class BezierPath {
     this.destroyOuterPointObjects()
     this.ghostVertex.destroy()
     this.unsubscribeOuterList?.()
+    this.unsubscribeMaskFields?.()
     this.outerPathLine.destroy()
     this.pathLine.destroy()
     this.registry.dispose()

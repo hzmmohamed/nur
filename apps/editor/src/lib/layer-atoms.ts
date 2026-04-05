@@ -1,8 +1,10 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { activeEntryAtom, projectDocRuntime, framesAtom, currentFrameAtom } from "./project-doc-atoms"
+import { appRegistry } from "./atom-registry"
 import type { Layer, LayerGroup, LayerOrderEntry } from "@nur/core"
 import * as Effect from "effect/Effect"
 import * as Y from "yjs"
+import { canvasMachineStateAtom } from "./canvas-machine"
 
 // -- Default layer colors (cycled when creating new layers) --
 const LAYER_COLORS = [
@@ -16,25 +18,20 @@ const LAYER_COLORS = [
   "#06B6D4", // cyan
 ] as const
 
-// -- Active layer ID (from awareness) --
+// -- Active layer ID (local writable atom) --
 
-export const activeLayerIdAtom = (() => {
-  let layerIdAtom: Atom.Atom<string | null | undefined> | undefined
-  return Atom.make((get): Result.Result<string | null> => {
-    const result = get(activeEntryAtom)
-    if (!Result.isSuccess(result)) return result as unknown as Result.Result<string | null>
-    if (!layerIdAtom) layerIdAtom = result.value.awareness.local.focus("activeLayerId").atom()
-    return Result.success(get(layerIdAtom) as string | null)
-  })
-})()
+/** @derived from canvas machine — do not set directly */
+export const activeLayerIdRawAtom = Atom.make((get): string | null => {
+  const state = get(canvasMachineStateAtom)
+  return state._tag === "Viewing" ? null : (state as any).layerId
+})
 
-/** Set active layer ID — writes to awareness */
-export const setActiveLayerIdAtom = projectDocRuntime.fn(
-  Effect.fnUntraced(function* (layerId: string | null, get: Atom.FnContext) {
-    const entry = yield* get.result(activeEntryAtom)
-    ;(entry.awareness.local.focus("activeLayerId") as any).syncSet(layerId)
-  }),
-)
+export const activeLayerIdAtom = Atom.make((get): Result.Result<string | null> => {
+  return Result.success(get(activeLayerIdRawAtom))
+})
+
+/** @deprecated — use machine events. Kept for import compatibility. */
+export const setActiveLayerIdAtom = activeLayerIdRawAtom
 
 // -- Layer order (from Y.Doc Y.Array) --
 
@@ -114,11 +111,16 @@ export const isEditModeAtom = Atom.make((get): boolean => {
   return Result.isSuccess(result) && result.value !== null
 })
 
-/** Which mask path is being edited: "inner" or "outer" */
-export const editingPathTargetAtom = Atom.make<"inner" | "outer">("inner")
+/** @derived from canvas machine — do not set directly */
+export const editingPathTargetAtom = Atom.make((get): "inner" | "outer" => {
+  const state = get(canvasMachineStateAtom)
+  return state._tag === "EditMask" ? (state as any).target : "inner"
+})
 
-/** Whether we're in Edit Mask sub-mode (editing an existing mask's paths) */
-export const editMaskModeAtom = Atom.make<boolean>(false)
+/** @derived from canvas machine — do not set directly */
+export const editMaskModeAtom = Atom.make((get): boolean => {
+  return get(canvasMachineStateAtom)._tag === "EditMask"
+})
 
 /** Whether the active layer has a mask on the current frame */
 export const currentFrameHasMaskAtom = Atom.make((get): boolean => {
@@ -231,10 +233,11 @@ export const maskOuterModeAtom = Atom.make((get): "uniform" | "free" => {
 export const setBufferDistanceAtom = projectDocRuntime.fn(
   Effect.fnUntraced(function* (distance: number, get: Atom.FnContext) {
     const entry = yield* get.result(activeEntryAtom)
-    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    const activeLayerId = appRegistry.get(activeLayerIdRawAtom)
     if (!activeLayerId) return
 
-    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const currentFrameResult = appRegistry.get(currentFrameAtom) as any
+    const currentFrame = currentFrameResult?._tag === "Success" ? currentFrameResult.value as number : 0
     const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
     const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
     const frame = frames[currentFrame] as { id: string } | undefined
@@ -256,10 +259,11 @@ export const setBufferDistanceAtom = projectDocRuntime.fn(
 export const setOuterModeAtom = projectDocRuntime.fn(
   Effect.fnUntraced(function* (mode: "uniform" | "free", get: Atom.FnContext) {
     const entry = yield* get.result(activeEntryAtom)
-    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    const activeLayerId = appRegistry.get(activeLayerIdRawAtom)
     if (!activeLayerId) return
 
-    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const currentFrameResult = appRegistry.get(currentFrameAtom) as any
+    const currentFrame = currentFrameResult?._tag === "Success" ? currentFrameResult.value as number : 0
     const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
     const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
     const frame = frames[currentFrame] as { id: string } | undefined
@@ -337,7 +341,7 @@ export const createLayerAtom = projectDocRuntime.fn(
     })
 
     // Auto-select the new layer
-    ;(entry.awareness.local.focus("activeLayerId") as any).syncSet(layerId)
+    appRegistry.set(activeLayerIdRawAtom, layerId)
 
     return layerId
   }),
@@ -347,10 +351,11 @@ export const createLayerAtom = projectDocRuntime.fn(
 export const discardCurrentMaskAtom = projectDocRuntime.fn(
   Effect.fnUntraced(function* (_: void, get: Atom.FnContext) {
     const entry = yield* get.result(activeEntryAtom)
-    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    const activeLayerId = appRegistry.get(activeLayerIdRawAtom)
     if (!activeLayerId) return
 
-    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const currentFrameResult = appRegistry.get(currentFrameAtom) as any
+    const currentFrame = currentFrameResult?._tag === "Success" ? currentFrameResult.value as number : 0
     const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
     const frames = Object.values(rawFrames).sort((a: any, b: any) => a.index - b.index)
     const frame = frames[currentFrame] as { id: string } | undefined
@@ -372,9 +377,9 @@ export const deleteLayerAtom = projectDocRuntime.fn(
     const entry = yield* get.result(activeEntryAtom)
 
     // If deleting the active layer, deselect
-    const activeId = (entry.awareness.local.focus("activeLayerId") as any).syncGet()
+    const activeId = appRegistry.get(activeLayerIdRawAtom)
     if (activeId === layerId) {
-      ;(entry.awareness.local.focus("activeLayerId") as any).syncSet(null)
+      appRegistry.set(activeLayerIdRawAtom, null)
     }
 
     entry.doc.transact(() => {
@@ -407,10 +412,11 @@ export const renameLayerAtom = projectDocRuntime.fn(
 export const copyMaskFromPreviousAtom = projectDocRuntime.fn(
   Effect.fnUntraced(function* (_: void, get: Atom.FnContext) {
     const entry = yield* get.result(activeEntryAtom)
-    const activeLayerId = (entry.awareness.local.focus("activeLayerId") as any).syncGet() as string | null
+    const activeLayerId = appRegistry.get(activeLayerIdRawAtom)
     if (!activeLayerId) return
 
-    const currentFrame = entry.awareness.local.focus("currentFrame").syncGet() as number
+    const currentFrameResult = appRegistry.get(currentFrameAtom) as any
+    const currentFrame = currentFrameResult?._tag === "Success" ? currentFrameResult.value as number : 0
     if (currentFrame <= 0) return
 
     const rawFrames = (entry.root.focus("frames").syncGet() ?? {}) as Record<string, any>
@@ -467,7 +473,7 @@ export const duplicateLayerAtom = projectDocRuntime.fn(
     })
 
     // Auto-select the new layer
-    ;(entry.awareness.local.focus("activeLayerId") as any).syncSet(newId)
+    appRegistry.set(activeLayerIdRawAtom, newId)
 
     return newId
   }),

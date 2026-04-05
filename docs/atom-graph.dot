@@ -1,0 +1,198 @@
+digraph atom_dependencies {
+  rankdir=TB
+  node [shape=box, style="rounded,filled", fontsize=10, fontname="Inter"]
+  edge [fontsize=8, fontname="Inter"]
+
+  // Color legend
+  subgraph cluster_legend {
+    label="Legend"
+    style=dashed
+    _foundation [label="Foundation\n(writable)" fillcolor="#E8F5E9"]
+    _sync [label="Sync State\n(from Y.Doc/Awareness)" fillcolor="#E3F2FD"]
+    _derived [label="Derived\n(computed)" fillcolor="#FFF3E0"]
+    _action [label="Action\n(write effects)" fillcolor="#FCE4EC"]
+    _canvas [label="Canvas\n(orchestrator)" fillcolor="#F3E5F5"]
+  }
+
+  // Foundation layer (no deps)
+  subgraph cluster_foundation {
+    label="Foundation (writable)"
+    style=filled; fillcolor="#F1F8E9"
+    activeProjectIdAtom [fillcolor="#E8F5E9"]
+    editingPathTargetAtom [fillcolor="#E8F5E9"]
+    editMaskModeAtom [fillcolor="#E8F5E9"]
+    canvasContainerAtom [fillcolor="#E8F5E9"]
+    resetViewSignalAtom [fillcolor="#E8F5E9"]
+    importProgressAtom [fillcolor="#E8F5E9"]
+    expandedGroupIdsAtom [fillcolor="#E8F5E9"]
+    layerVisibilityAtom [fillcolor="#E8F5E9", label="layerVisibilityAtom\n(kvs/localStorage)"]
+    stagePositionAtom [fillcolor="#E8F5E9"]
+    stageSizeAtom [fillcolor="#E8F5E9"]
+  }
+
+  // Entry layer
+  activeEntryAtom [fillcolor="#E3F2FD", penwidth=2, label="activeEntryAtom\n(central gateway)"]
+  activeProjectIdAtom -> activeEntryAtom
+
+  // Sync state (from Y.Doc / Awareness)
+  subgraph cluster_sync {
+    label="Sync State (Y.Doc / Awareness)"
+    style=filled; fillcolor="#E8EAF6"
+    activeLayerIdAtom [fillcolor="#E3F2FD"]
+    activeToolAtom [fillcolor="#E3F2FD"]
+    activePathIdAtom [fillcolor="#E3F2FD"]
+    drawingStateAtom [fillcolor="#E3F2FD"]
+    zoomAtom [fillcolor="#E3F2FD"]
+    framesAtom [fillcolor="#E3F2FD"]
+    currentFrameAtom [fillcolor="#E3F2FD"]
+    layerOrderAtom [fillcolor="#E3F2FD"]
+    layerGroupsAtom [fillcolor="#E3F2FD"]
+  }
+
+  activeEntryAtom -> activeLayerIdAtom
+  activeEntryAtom -> activeToolAtom
+  activeEntryAtom -> activePathIdAtom
+  activeEntryAtom -> drawingStateAtom
+  activeEntryAtom -> zoomAtom
+  activeEntryAtom -> framesAtom
+  activeEntryAtom -> currentFrameAtom
+  activeEntryAtom -> layerOrderAtom
+  activeEntryAtom -> layerGroupsAtom
+
+  // Derived layer
+  subgraph cluster_derived {
+    label="Derived (computed)"
+    style=filled; fillcolor="#FFF8E1"
+    layersAtom [fillcolor="#FFF3E0"]
+    activeLayerAtom [fillcolor="#FFF3E0"]
+    isEditModeAtom [fillcolor="#FFF3E0"]
+    isDrawingAtom [fillcolor="#FFF3E0"]
+    panelsDisabledAtom [fillcolor="#FFF3E0"]
+    currentFrameHasMaskAtom [fillcolor="#FFF3E0"]
+    previousFrameMaskExistsAtom [fillcolor="#FFF3E0"]
+    maskBufferDistanceAtom [fillcolor="#FFF3E0"]
+    maskOuterModeAtom [fillcolor="#FFF3E0"]
+  }
+
+  activeEntryAtom -> layersAtom
+  layerOrderAtom -> layersAtom
+  activeLayerIdAtom -> activeLayerAtom
+  layersAtom -> activeLayerAtom
+  activeLayerIdAtom -> isEditModeAtom
+  drawingStateAtom -> isDrawingAtom
+  framesAtom -> panelsDisabledAtom
+  isDrawingAtom -> panelsDisabledAtom
+  activeLayerIdAtom -> currentFrameHasMaskAtom
+  layersAtom -> currentFrameHasMaskAtom
+  framesAtom -> currentFrameHasMaskAtom
+  currentFrameAtom -> currentFrameHasMaskAtom
+  activeLayerIdAtom -> previousFrameMaskExistsAtom
+  layersAtom -> previousFrameMaskExistsAtom
+  framesAtom -> previousFrameMaskExistsAtom
+  currentFrameAtom -> previousFrameMaskExistsAtom
+  activeLayerIdAtom -> maskBufferDistanceAtom
+  layersAtom -> maskBufferDistanceAtom
+  framesAtom -> maskBufferDistanceAtom
+  currentFrameAtom -> maskBufferDistanceAtom
+  activeLayerIdAtom -> maskOuterModeAtom
+  layersAtom -> maskOuterModeAtom
+  framesAtom -> maskOuterModeAtom
+  currentFrameAtom -> maskOuterModeAtom
+
+  // Action layer
+  subgraph cluster_actions {
+    label="Actions (write to Y.Doc/Awareness)"
+    style=filled; fillcolor="#FFEBEE"
+    setActiveLayerIdAtom [fillcolor="#FCE4EC"]
+    setActiveToolAtom [fillcolor="#FCE4EC"]
+    setDrawingStateAtom [fillcolor="#FCE4EC"]
+    setActivePathIdAtom [fillcolor="#FCE4EC"]
+    setCurrentFrameAtom [fillcolor="#FCE4EC"]
+    setZoomAtom [fillcolor="#FCE4EC"]
+    setBufferDistanceAtom [fillcolor="#FCE4EC"]
+    setOuterModeAtom [fillcolor="#FCE4EC"]
+    createLayerAtom [fillcolor="#FCE4EC"]
+    deleteLayerAtom [fillcolor="#FCE4EC"]
+    renameLayerAtom [fillcolor="#FCE4EC"]
+    duplicateLayerAtom [fillcolor="#FCE4EC"]
+    reorderLayersAtom [fillcolor="#FCE4EC"]
+    copyMaskFromPreviousAtom [fillcolor="#FCE4EC"]
+    discardCurrentMaskAtom [fillcolor="#FCE4EC"]
+    createLayerGroupAtom [fillcolor="#FCE4EC"]
+    deleteLayerGroupAtom [fillcolor="#FCE4EC"]
+    importFnAtom [fillcolor="#FCE4EC"]
+  }
+
+  // Canvas orchestrator
+  canvasAtom [fillcolor="#F3E5F5", penwidth=3, label="canvasAtom\n(canvas orchestrator)"]
+  canvasContainerAtom -> canvasAtom
+  activeEntryAtom -> canvasAtom
+  currentFrameAtom -> canvasAtom
+  framesAtom -> canvasAtom
+  activeToolAtom -> canvasAtom
+  activePathIdAtom -> canvasAtom
+  drawingStateAtom -> canvasAtom
+  activeLayerIdAtom -> canvasAtom
+  zoomAtom -> canvasAtom
+  resetViewSignalAtom -> canvasAtom
+  editingPathTargetAtom -> canvasAtom
+  editMaskModeAtom -> canvasAtom
+
+  // Canvas writes
+  canvasAtom -> setActivePathIdAtom [style=dashed, color=red]
+  canvasAtom -> setBufferDistanceAtom [style=dashed, color=red]
+  canvasAtom -> setZoomAtom [style=dashed, color=red]
+  canvasAtom -> stagePositionAtom [style=dashed, color=red]
+  canvasAtom -> stageSizeAtom [style=dashed, color=red]
+
+  // Component reads (simplified)
+  subgraph cluster_components {
+    label="Components"
+    style=filled; fillcolor="#ECEFF1"
+    node [shape=ellipse]
+    CanvasBar [fillcolor="#CFD8DC"]
+    Timeline [fillcolor="#CFD8DC"]
+    TimelineLayers [fillcolor="#CFD8DC"]
+    EditorLayout [fillcolor="#CFD8DC"]
+    CanvasStatusBar [fillcolor="#CFD8DC"]
+  }
+
+  activeLayerAtom -> CanvasBar
+  drawingStateAtom -> CanvasBar
+  currentFrameHasMaskAtom -> CanvasBar
+  previousFrameMaskExistsAtom -> CanvasBar
+  editMaskModeAtom -> CanvasBar
+  editingPathTargetAtom -> CanvasBar
+  maskBufferDistanceAtom -> CanvasBar
+  maskOuterModeAtom -> CanvasBar
+  zoomAtom -> CanvasBar
+
+  layersAtom -> Timeline
+  layerGroupsAtom -> Timeline
+  activeLayerIdAtom -> Timeline
+  expandedGroupIdsAtom -> Timeline
+
+  layersAtom -> TimelineLayers
+  layerGroupsAtom -> TimelineLayers
+  activeLayerIdAtom -> TimelineLayers
+  layerVisibilityAtom -> TimelineLayers
+
+  panelsDisabledAtom -> EditorLayout
+  isEditModeAtom -> CanvasStatusBar
+  drawingStateAtom -> CanvasStatusBar
+
+  // Drawing actions (imperative)
+  subgraph cluster_drawing_actions {
+    label="Drawing Actions (imperative)"
+    style=filled; fillcolor="#EFEBE9"
+    node [shape=hexagon]
+    commitNewMask [fillcolor="#D7CCC8"]
+    discardNewMask [fillcolor="#D7CCC8"]
+  }
+
+  commitNewMask -> setDrawingStateAtom [style=dashed, color=red]
+  commitNewMask -> setActiveToolAtom [style=dashed, color=red]
+  discardNewMask -> discardCurrentMaskAtom [style=dashed, color=red]
+  discardNewMask -> setDrawingStateAtom [style=dashed, color=red]
+  discardNewMask -> setActiveToolAtom [style=dashed, color=red]
+}

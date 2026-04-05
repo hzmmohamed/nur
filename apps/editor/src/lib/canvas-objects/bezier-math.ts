@@ -214,8 +214,25 @@ function vertexNormal(
 }
 
 /**
+ * Compute signed area of a polygon (shoelace formula).
+ * Positive = clockwise in screen coords (Y-down), negative = counter-clockwise.
+ */
+function signedArea(points: ReadonlyArray<{ x: number; y: number }>): number {
+  let area = 0
+  for (let i = 0; i < points.length; i++) {
+    const j = (i + 1) % points.length
+    area += points[i].x * points[j].y
+    area -= points[j].x * points[i].y
+  }
+  return area / 2
+}
+
+/**
  * Generate an outer path by offsetting each inner path point
  * along its outward normal by `bufferDistance`.
+ *
+ * Automatically detects winding direction (clockwise vs counter-clockwise)
+ * to ensure the offset always goes outward.
  *
  * Handle angles are preserved. Handle distances are scaled by
  * (1 + bufferDistance / avgEdgeLength) to approximate the offset curve.
@@ -241,6 +258,11 @@ export function computeOuterPath(
     innerPoints[0].x === innerPoints[innerPoints.length - 1].x &&
     innerPoints[0].y === innerPoints[innerPoints.length - 1].y
 
+  // Detect winding direction: flip normals if counter-clockwise (negative signed area)
+  // so the offset always goes outward
+  const area = signedArea(innerPoints)
+  const normalSign = area >= 0 ? 1 : -1
+
   return innerPoints.map((pt, i) => {
     const prev = i > 0
       ? innerPoints[i - 1]
@@ -256,8 +278,8 @@ export function computeOuterPath(
     )
 
     return {
-      x: pt.x + normal.x * bufferDistance,
-      y: pt.y + normal.y * bufferDistance,
+      x: pt.x + normal.x * bufferDistance * normalSign,
+      y: pt.y + normal.y * bufferDistance * normalSign,
       handleInAngle: pt.handleInAngle,
       handleInDistance: pt.handleInDistance * handleScale,
       handleOutAngle: pt.handleOutAngle,

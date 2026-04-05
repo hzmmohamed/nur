@@ -1,27 +1,23 @@
 import { Result } from "@effect-atom/atom"
-import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   activeLayerAtom,
-  setActiveLayerIdAtom,
   currentFrameHasMaskAtom,
   previousFrameMaskExistsAtom,
   copyMaskFromPreviousAtom,
   editingPathTargetAtom,
   editMaskModeAtom,
+  maskBufferDistanceAtom,
   maskOuterModeAtom,
-  setOuterModeAtom,
+  setBufferDistanceAtom,
 } from "../lib/layer-atoms"
 import {
-  activeToolAtom,
-  setActiveToolAtom,
   drawingStateAtom,
-  setDrawingStateAtom,
 } from "../lib/path-atoms"
 import { framesAtom, currentFrameAtom, setCurrentFrameAtom } from "../lib/project-doc-atoms"
 import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
 import { appRegistry } from "../lib/atom-registry"
-import { pushHotkeyScope } from "../actors/hotkey-manager"
-import { commitNewMask, discardNewMask } from "../lib/drawing-actions"
+import { CanvasEvent, canvasActor } from "../lib/canvas-machine"
 import { Button } from "@/components/ui/button"
 
 const BAR_CLASS = "flex items-center gap-2 px-3 py-1 bg-background/80 backdrop-blur-sm border-b border-border text-xs min-h-8"
@@ -46,21 +42,22 @@ export function CanvasBar() {
   const hasMask = useAtomValue(currentFrameHasMaskAtom)
   const hasPrevMask = useAtomValue(previousFrameMaskExistsAtom)
 
-  const [editMaskMode, setEditMaskMode] = useAtom(editMaskModeAtom)
-  const [editingTarget, setEditingTarget] = useAtom(editingPathTargetAtom)
+  const editMaskMode = useAtomValue(editMaskModeAtom)
+  const editingTarget = useAtomValue(editingPathTargetAtom)
+  const bufferDistance = useAtomValue(maskBufferDistanceAtom)
   const outerMode = useAtomValue(maskOuterModeAtom)
-  const triggerSetOuterMode = useAtomSet(setOuterModeAtom)
+  const triggerSetBuffer = useAtomSet(setBufferDistanceAtom)
 
   const zoomResult = useAtomValue(zoomAtom)
   const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
 
   // -- Setters --
-  const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
-  const setTool = useAtomSet(setActiveToolAtom)
-  const setDrawingState = useAtomSet(setDrawingStateAtom)
   const triggerSetFrame = useAtomSet(setCurrentFrameAtom)
   const copyFromPrev = useAtomSet(copyMaskFromPreviousAtom)
   const setZoom = useAtomSet(setZoomAtom)
+
+  // -- Machine events --
+  const send = (event: any) => canvasActor?.sendSync(event)
 
   const isEditing = !!activeLayer
 
@@ -80,7 +77,7 @@ export function CanvasBar() {
             size="sm"
             className="h-6 px-2 text-xs gap-1"
             disabled={!isClosed}
-            onClick={commitNewMask}
+            onClick={() => send(CanvasEvent.CommitMask)}
             title={isClosed ? "Commit mask" : undefined}
           >
             <CheckIcon className="size-3" /> Done
@@ -90,7 +87,7 @@ export function CanvasBar() {
           variant="ghost"
           size="sm"
           className="h-6 px-2 text-xs gap-1 text-destructive-foreground"
-          onClick={discardNewMask}
+          onClick={() => send(CanvasEvent.DiscardMask)}
         >
           <CloseIcon className="size-3" /> Discard
         </Button>
@@ -113,14 +110,14 @@ export function CanvasBar() {
         <Button
           variant={outerMode === "uniform" ? "secondary" : "ghost"}
           size="sm" className="h-6 px-2 text-xs"
-          onClick={() => triggerSetOuterMode("uniform")}
+          onClick={() => send(CanvasEvent.SetOuterMode({ mode: "uniform" }))}
         >
           Uniform
         </Button>
         <Button
           variant={outerMode === "free" ? "secondary" : "ghost"}
           size="sm" className="h-6 px-2 text-xs"
-          onClick={() => triggerSetOuterMode("free")}
+          onClick={() => send(CanvasEvent.SetOuterMode({ mode: "free" }))}
         >
           Free
         </Button>
@@ -132,32 +129,48 @@ export function CanvasBar() {
             <Button
               variant={editingTarget === "inner" ? "secondary" : "ghost"}
               size="sm" className="h-6 px-2 text-xs"
-              onClick={() => setEditingTarget("inner")}
+              onClick={() => send(CanvasEvent.SetEditingTarget({ target: "inner" }))}
             >
               Inner
             </Button>
             <Button
               variant={editingTarget === "outer" ? "secondary" : "ghost"}
               size="sm" className="h-6 px-2 text-xs"
-              onClick={() => setEditingTarget("outer")}
+              onClick={() => send(CanvasEvent.SetEditingTarget({ target: "outer" }))}
             >
               Outer
             </Button>
           </>
         )}
 
-        {outerMode === "uniform" && (
-          <span className="text-muted-foreground/60">Drag outer path to adjust buffer</span>
-        )}
+        {/* Buffer distance — slider + number input, visible in both modes */}
+        <span className="text-border mx-1">|</span>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          Buffer
+          <input
+            type="range"
+            min="2" max="100" step="1"
+            value={bufferDistance}
+            onChange={(e) => triggerSetBuffer(Number(e.target.value))}
+            className="w-16 h-1 accent-muted-foreground cursor-pointer"
+          />
+          <input
+            type="number"
+            min="2" max="200" step="1"
+            value={bufferDistance}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              if (!isNaN(v) && v >= 2) triggerSetBuffer(v)
+            }}
+            className="w-10 h-5 px-1 text-xs text-right tabular-nums bg-transparent border border-border rounded outline-none focus:border-ring"
+          />
+        </label>
 
         <div className="flex-1" />
 
         <Button
           variant="ghost" size="sm" className="h-6 px-2 text-xs"
-          onClick={() => {
-            setEditMaskMode(false)
-            setEditingTarget("inner")
-          }}
+          onClick={() => send(CanvasEvent.ExitEditMask)}
         >
           <ChevronLeftIcon className="size-3" /> Back
         </Button>
@@ -198,11 +211,7 @@ export function CanvasBar() {
         {hasMask && (
           <Button
             variant="ghost" size="sm" className="h-6 px-2 text-xs"
-            onClick={() => {
-              setEditMaskMode(true)
-              setEditingTarget("inner")
-              setTool("select")
-            }}
+            onClick={() => send(CanvasEvent.EnterEditMask)}
           >
             Edit Mask
           </Button>
@@ -219,25 +228,14 @@ export function CanvasBar() {
 
         <Button
           variant="ghost" size="sm" className="h-6 px-2 text-xs"
-          onClick={() => {
-            setEditMaskMode(false)
-            setTool("pen")
-            setDrawingState("drawing")
-            pushHotkeyScope({
-              id: "drawing",
-              bindings: [{ key: "Escape", handler: discardNewMask }],
-            })
-          }}
+          onClick={() => send(CanvasEvent.StartNewMask)}
         >
           New Mask
         </Button>
 
         <Button
           variant="ghost" size="sm" className="h-6 w-6 p-0"
-          onClick={() => {
-            setActiveLayerId(null)
-            setEditMaskMode(false)
-          }}
+          onClick={() => send(CanvasEvent.DeselectLayer)}
           aria-label="Exit edit mode"
         >
           <CloseIcon className="size-3.5" />

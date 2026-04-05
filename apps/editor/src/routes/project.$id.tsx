@@ -11,6 +11,8 @@ import {
   currentFrameAtom,
   setCurrentFrameAtom,
 } from "../lib/project-doc-atoms"
+import { awarenessSyncAtom } from "../lib/awareness-sync"
+import { canvasMachineAtom } from "../lib/canvas-machine-lifecycle"
 import { FrameDropZone } from "../components/frame-drop-zone"
 import { Timeline } from "../components/timeline"
 import { EditorLayout } from "../components/editor-layout"
@@ -139,8 +141,10 @@ function ProjectEditor({ metaName, lastModified }: { metaName?: string; lastModi
   }, [navigate, id])
 
   // -- Mount reactive atoms --
+  useAtomMount(canvasMachineAtom)
   useAtomMount(canvasAtom)
   useAtomMount(editorHotkeyAtom)
+  useAtomMount(awarenessSyncAtom)
 
   // -- Read-only atom values for rendering --
   const nameResult = useAtomValue(projectNameAtom)
