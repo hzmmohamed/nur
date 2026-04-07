@@ -2,7 +2,7 @@ import Konva from "konva"
 import { Atom, Result } from "@effect-atom/atom"
 import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
-import { activeToolAtom, activePathIdAtom, setActivePathIdAtom, drawingStateAtom } from "./path-atoms"
+import { activeToolAtom, activePathIdAtom, activePathIdRawAtom, drawingStateAtom } from "./path-atoms"
 import { canvasActor, CanvasEvent } from "./canvas-machine"
 import { activeLayerIdAtom, editMaskModeAtom, editingPathTargetAtom, setBufferDistanceAtom } from "./layer-atoms"
 import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
@@ -181,7 +181,7 @@ export const canvasAtom = Atom.make((get) => {
       const maskData = maskLens.syncGet()
       const pathKey = `${layerId}:${frameId}`
       const bp = new BezierPath(innerLens, pathsLayer, {
-        onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
+        onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
         color: (layerData as any).color,
         fillOpacity: 0.25,
         outerLens,
@@ -211,7 +211,7 @@ export const canvasAtom = Atom.make((get) => {
       const pathKey = `${layerId}:${frameId}`
       const activePathId = getActivePathId()
       const bp = new BezierPath(innerLens, pathsLayer, {
-        onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
+        onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
         color: layerColor,
         fillOpacity: 0.35,
         outerLens,
@@ -409,7 +409,7 @@ export const canvasAtom = Atom.make((get) => {
       const innerLens = maskLens.focus("inner")
       const outerLens = maskLens.focus("outer")
       const bp = new BezierPath(innerLens, pathsLayer, {
-        onSelect: () => appRegistry.set(setActivePathIdAtom, pathKey),
+        onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
         color: layerData?.color,
         fillOpacity: 0.35,
         outerLens,
@@ -420,7 +420,7 @@ export const canvasAtom = Atom.make((get) => {
       })
       bp.setActive(true)
       MutableHashMap.set(paths, pathKey, bp)
-      appRegistry.set(setActivePathIdAtom, pathKey)
+      appRegistry.set(activePathIdRawAtom, pathKey)
       pathsLayer.moveToTop()
     }
 

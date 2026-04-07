@@ -4,10 +4,10 @@ import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   layersAtom,
   activeLayerIdAtom,
-  setActiveLayerIdAtom,
   createLayerAtom,
   deleteLayerAtom,
 } from "../../lib/layer-atoms"
+import { canvasActor, CanvasEvent } from "../../lib/canvas-machine"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -16,7 +16,6 @@ export function LayersPanel() {
   const layers = Result.isSuccess(layersResult) ? layersResult.value : []
   const activeLayerIdResult = useAtomValue(activeLayerIdAtom)
   const activeLayerId = Result.isSuccess(activeLayerIdResult) ? activeLayerIdResult.value : null
-  const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
   const createLayer = useAtomSet(createLayerAtom)
   const deleteLayer = useAtomSet(deleteLayerAtom)
 
@@ -27,6 +26,14 @@ export function LayersPanel() {
     if (!trimmed) return
     createLayer(trimmed)
     setNewLayerName("")
+  }
+
+  const handleSelectLayer = (layerId: string, isActive: boolean) => {
+    if (isActive) {
+      canvasActor?.sendSync(CanvasEvent.DeselectLayer)
+    } else {
+      canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId }))
+    }
   }
 
   return (
@@ -71,11 +78,11 @@ export function LayersPanel() {
                   tabIndex={0}
                   aria-label={`Select layer ${layer.name}`}
                   aria-pressed={isActive}
-                  onClick={() => setActiveLayerId(isActive ? null : layer.id)}
+                  onClick={() => handleSelectLayer(layer.id, isActive)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
-                      setActiveLayerId(isActive ? null : layer.id)
+                      handleSelectLayer(layer.id, isActive)
                     }
                   }}
                 >

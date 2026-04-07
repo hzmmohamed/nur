@@ -30,9 +30,6 @@ export const activeLayerIdAtom = Atom.make((get): Result.Result<string | null> =
   return Result.success(get(activeLayerIdRawAtom))
 })
 
-/** @deprecated — use machine events. Kept for import compatibility. */
-export const setActiveLayerIdAtom = activeLayerIdRawAtom
-
 // -- Layer order (from Y.Doc Y.Array) --
 
 /** Reactive atom for the layerOrder Y.Array — the source of truth for tree structure */

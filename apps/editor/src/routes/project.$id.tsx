@@ -22,11 +22,8 @@ import { appRegistry } from "../lib/atom-registry"
 import { registerHotkeyContext } from "../actors/hotkey-manager"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  setActiveToolAtom,
-  setActivePathIdAtom,
-} from "../lib/path-atoms"
-import { setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { activePathIdRawAtom } from "../lib/path-atoms"
+import { canvasActor, CanvasEvent } from "../lib/canvas-machine"
 import { setZoomAtom, resetViewSignalAtom } from "../lib/viewport-atoms"
 import { transitionProjectIdAtom } from "./index"
 
@@ -59,18 +56,10 @@ function setupEditorHotkeys() {
         },
       },
       {
-        key: "v",
-        handler: () => appRegistry.set(setActiveToolAtom, "select"),
-      },
-      {
-        key: "p",
-        handler: () => appRegistry.set(setActiveToolAtom, "pen"),
-      },
-      {
         key: "Escape",
         handler: () => {
-          appRegistry.set(setActivePathIdAtom, null)
-          appRegistry.set(setActiveLayerIdAtom, null)
+          appRegistry.set(activePathIdRawAtom, null)
+          canvasActor?.sendSync(CanvasEvent.DeselectLayer)
         },
       },
       {

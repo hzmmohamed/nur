@@ -4,7 +4,8 @@ import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks
 import { BrowserKeyValueStore } from "@effect/platform-browser"
 import * as S from "effect/Schema"
 import { appRegistry } from "../lib/atom-registry"
-import { layersAtom, layerGroupsAtom, activeLayerIdAtom, setActiveLayerIdAtom } from "../lib/layer-atoms"
+import { layersAtom, layerGroupsAtom, activeLayerIdAtom } from "../lib/layer-atoms"
+import { canvasActor, CanvasEvent } from "../lib/canvas-machine"
 import { TimelineLayers, buildTree, expandedGroupIdsAtom, type LayerNodeData } from "./timeline-layers"
 import type { TreeNodeNested } from "@/lib/tree-types"
 import {
@@ -147,7 +148,7 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
   const groups = Result.isSuccess(groupsResult) ? groupsResult.value : []
   const activeLayerIdResult = useAtomValue(activeLayerIdAtom)
   const activeLayerId = Result.isSuccess(activeLayerIdResult) ? activeLayerIdResult.value : null
-  const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
+  // Layer selection via machine events
 
   // Build tree and compute visual row positions (groups take rows but don't get tracks)
   const expandedIds = useAtomValue(expandedGroupIdsAtom)
@@ -215,10 +216,10 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
       onFrameSelect(positionToFrame(e.clientX))
       const layerId = positionToLayerId(e.clientY)
       if (layerId) {
-        setActiveLayerId(layerId)
+        canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId }))
       }
     },
-    [frameCount, onFrameSelect, positionToFrame, positionToLayerId, setActiveLayerId],
+    [frameCount, onFrameSelect, positionToFrame, positionToLayerId],
   )
 
   // Sync vertical scroll between label panel and grid + persist

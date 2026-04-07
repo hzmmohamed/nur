@@ -44,11 +44,3 @@ export const isDrawingAtom = Atom.make((get): boolean => {
   return state._tag === "NewMask" || state._tag === "NewMaskClosed"
 })
 
-// ── Setter aliases — REMOVED ──
-// State changes now go through the machine actor:
-//   actor.sendSync(CanvasEvent.X)
-// These are kept as no-op exports to avoid breaking imports during migration.
-// TODO: remove once all callers use machine events directly.
-export const setActiveToolAtom = activeToolRawAtom
-export const setActivePathIdAtom = activePathIdRawAtom
-export const setDrawingStateAtom = drawingStateRawAtom

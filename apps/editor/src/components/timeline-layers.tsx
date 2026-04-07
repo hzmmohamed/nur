@@ -7,11 +7,11 @@ import { TreeView } from "@/components/tree-view"
 import type { TreeNodeNested, TreeNodeRenderProps } from "@/lib/tree-types"
 import type { Layer, LayerGroup } from "@nur/core"
 import { appRegistry } from "../lib/atom-registry"
+import { canvasActor, CanvasEvent } from "../lib/canvas-machine"
 import {
   layersAtom,
   layerGroupsAtom,
   activeLayerIdAtom,
-  setActiveLayerIdAtom,
   renameLayerAtom,
   duplicateLayerAtom,
   deleteLayerAtom,
@@ -387,53 +387,67 @@ function LayerNodeRenderer({
         </span>
       )}
 
-      {/* Edit button — always visible for layers */}
-      {data.type === "layer" && (
-        <button
-          className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${
-            isActiveForEditing
-              ? "text-foreground bg-accent"
-              : "text-muted-foreground/40 hover:text-foreground"
-          }`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit(data.layerId)
-          }}
-          title={isActiveForEditing ? "Currently editing" : "Edit layer"}
-        >
-          <PencilIcon className="size-2.5" />
-        </button>
-      )}
+      {/* Right-aligned actions: edit icon at right, hover buttons slide in to its right pushing it left */}
+      <span className="ml-auto flex items-center gap-0.5 flex-shrink-0 flex-row-reverse">
+        {/* Hover action buttons — grid for width + individual slide-in */}
+        {!isEditing && (
+          <span
+            className="grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
+            style={{ gridTemplateColumns: isHovered ? "1fr" : "0fr" }}
+          >
+            <span className={`flex items-center gap-0.5 overflow-hidden min-w-0 ${
+              isHovered ? "" : "pointer-events-none"
+            }`}>
+              {data.type === "layer" && (
+                <button
+                  className={`flex items-center justify-center size-5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-200 ease-out ${
+                    isHovered ? "opacity-100 translate-x-0 delay-[50ms]" : "opacity-0 translate-x-2"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDuplicate(data.layerId)
+                  }}
+                  aria-label={`Duplicate ${data.name}`}
+                  title="Duplicate"
+                >
+                  <CopyIcon className="size-3" />
+                </button>
+              )}
+              <button
+                className={`flex items-center justify-center size-5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all duration-200 ease-out ${
+                  isHovered ? "opacity-100 translate-x-0 delay-100" : "opacity-0 translate-x-2"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(data.layerId, data.type)
+                }}
+                aria-label={`Delete ${data.name}`}
+                title="Delete"
+              >
+                <TrashIcon className="size-3" />
+              </button>
+            </span>
+          </span>
+        )}
 
-      {/* Hover action buttons */}
-      {isHovered && !isEditing && (
-        <span className="flex items-center gap-0.5 flex-shrink-0">
-          {data.type === "layer" && (
-            <button
-              className="flex items-center justify-center size-5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDuplicate(data.layerId)
-              }}
-              aria-label={`Duplicate ${data.name}`}
-              title="Duplicate"
-            >
-              <CopyIcon className="size-3" />
-            </button>
-          )}
+        {/* Edit button — always visible, sits at right edge, gets pushed left when hover actions expand */}
+        {data.type === "layer" && (
           <button
-            className="flex items-center justify-center size-5 rounded hover:bg-destructive/20 transition-colors text-muted-foreground hover:text-destructive"
+            className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${
+              isActiveForEditing
+                ? "text-foreground bg-accent"
+                : "text-muted-foreground/40 hover:text-foreground"
+            }`}
             onClick={(e) => {
               e.stopPropagation()
-              onDelete(data.layerId, data.type)
+              onEdit(data.layerId)
             }}
-            aria-label={`Delete ${data.name}`}
-            title="Delete"
+            title={isActiveForEditing ? "Currently editing" : "Edit layer"}
           >
-            <TrashIcon className="size-3" />
+            <PencilIcon className="size-2.5" />
           </button>
-        </span>
-      )}
+        )}
+      </span>
     </div>
   )
 }
@@ -469,7 +483,6 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
   }, [allGroupTreeIds])
 
   // -- Atom setters --
-  const setActiveLayerId = useAtomSet(setActiveLayerIdAtom)
   const renameLayer = useAtomSet(renameLayerAtom)
   const duplicateLayer = useAtomSet(duplicateLayerAtom)
   const deleteLayer = useAtomSet(deleteLayerAtom)
@@ -496,9 +509,13 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
     (ids: string[]) => {
       // Only select layer nodes, not group nodes
       const layerId = ids.find((id) => !id.startsWith("group-")) ?? null
-      setActiveLayerId(layerId)
+      if (layerId) {
+        canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId }))
+      } else {
+        canvasActor?.sendSync(CanvasEvent.DeselectLayer)
+      }
     },
-    [setActiveLayerId],
+    [],
   )
 
   // -- Inline rename --
@@ -580,7 +597,7 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
           onCommitEdit={handleCommitEdit}
           onCancelEdit={handleCancelEdit}
           onHover={setHoveredId}
-          onEdit={(id) => setActiveLayerId(id)}
+          onEdit={(id) => canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId: id }))}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
         />
@@ -592,7 +609,6 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
       hoveredId,
       visibilityMap,
       activeLayerId,
-      setActiveLayerId,
       handleStartEdit,
       handleCommitEdit,
       handleCancelEdit,
