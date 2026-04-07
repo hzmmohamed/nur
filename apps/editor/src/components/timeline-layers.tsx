@@ -242,10 +242,11 @@ function EyeOffIcon({ className }: { className?: string }) {
   )
 }
 
-function PencilIcon({ className }: { className?: string }) {
+function FocusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
     </svg>
   )
 }
@@ -260,14 +261,14 @@ interface LayerNodeRendererProps {
   editingName: string
   hoveredId: string | null
   isVisible: boolean
-  isActiveForEditing: boolean
+  isFocused: boolean
   onToggleVisibility: (id: string) => void
   onStartEdit: (id: string, name: string) => void
   onEditChange: (name: string) => void
   onCommitEdit: () => void
   onCancelEdit: () => void
   onHover: (id: string | null) => void
-  onEdit: (layerId: string) => void
+  onFocus: (layerId: string) => void
   onDuplicate: (layerId: string) => void
   onDelete: (id: string, type: "layer" | "group") => void
 }
@@ -278,14 +279,14 @@ function LayerNodeRenderer({
   editingName,
   hoveredId,
   isVisible,
-  isActiveForEditing,
+  isFocused,
   onToggleVisibility,
   onStartEdit,
   onEditChange,
   onCommitEdit,
   onCancelEdit,
   onHover,
-  onEdit,
+  onFocus,
   onDuplicate,
   onDelete,
 }: LayerNodeRendererProps) {
@@ -434,17 +435,17 @@ function LayerNodeRenderer({
         {data.type === "layer" && (
           <button
             className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${
-              isActiveForEditing
+              isFocused
                 ? "text-foreground bg-accent"
                 : "text-muted-foreground/40 hover:text-foreground"
             }`}
             onClick={(e) => {
               e.stopPropagation()
-              onEdit(data.layerId)
+              onFocus(data.layerId)
             }}
-            title={isActiveForEditing ? "Currently editing" : "Edit layer"}
+            title={isFocused ? "Focused" : "Focus layer"}
           >
-            <PencilIcon className="size-2.5" />
+            <FocusIcon className="size-2.5" />
           </button>
         )}
       </span>
@@ -590,14 +591,14 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
           editingName={editingName}
           hoveredId={hoveredId}
           isVisible={nodeVisibility}
-          isActiveForEditing={props.node.data.layerId === activeLayerId}
+          isFocused={props.node.data.layerId === activeLayerId}
           onToggleVisibility={(id) => toggleVisibility(id)}
           onStartEdit={handleStartEdit}
           onEditChange={setEditingName}
           onCommitEdit={handleCommitEdit}
           onCancelEdit={handleCancelEdit}
           onHover={setHoveredId}
-          onEdit={(id) => canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId: id }))}
+          onFocus={(id) => canvasActor?.sendSync(CanvasEvent.SelectLayer({ layerId: id }))}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
         />
