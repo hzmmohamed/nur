@@ -6,6 +6,7 @@ export const OuterModeSchema = S.Literal("uniform", "free")
 export type OuterMode = S.Schema.Type<typeof OuterModeSchema>
 
 export const MaskSchema = S.Struct({
+  name: S.NullOr(S.String),
   inner: YLinkedList(BezierPointSchema),
   outer: YLinkedList(BezierPointSchema),
   bufferDistance: S.Number,
@@ -19,7 +20,7 @@ export const LayerSchema = S.Struct({
   color: S.String.pipe(S.minLength(1)),
   index: S.Number.pipe(S.int(), S.nonNegative()),
   groupId: S.NullOr(S.String),
-  masks: S.Record({ key: S.String, value: MaskSchema }),
+  masks: S.Record({ key: S.String, value: S.Record({ key: S.String, value: MaskSchema }) }),
 })
 
 export type Layer = S.Schema.Type<typeof LayerSchema>

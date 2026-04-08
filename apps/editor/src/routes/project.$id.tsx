@@ -179,9 +179,10 @@ function ProjectEditor({ metaName, lastModified }: { metaName?: string; lastModi
     <EditorLayout
       header={
         <header className="flex items-center gap-3 px-4 py-2 border-b border-border">
-          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleBack}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleBack} title="Home">
             <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </Button>
           <h1 className="text-sm font-semibold">{name}</h1>

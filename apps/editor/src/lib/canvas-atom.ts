@@ -52,6 +52,7 @@ export const canvasAtom = Atom.make((get) => {
   // -- Pointer gesture state for pen tool --
   let dragOrigin: { x: number; y: number } | null = null
   let newPointId: string | null = null
+  let activeMaskId: string | null = null
   let isDraggingNewHandle = false
   const DRAG_THRESHOLD = 3
 
@@ -166,31 +167,39 @@ export const canvasAtom = Atom.make((get) => {
     }
   }
 
+  function getFrameMasks(layerId: string, frameId: string): Record<string, any> | null {
+    const masksRecord = getLayerMasksRecord(layerId)
+    if (!masksRecord || !(frameId in masksRecord)) return null
+    return masksRecord[frameId] as Record<string, any> ?? null
+  }
+
   function syncAllLayerPaths(frameId: string) {
     disposeAllPaths()
     pathsLayer.destroyChildren()
 
     const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
     for (const [layerId, layerData] of Object.entries(layersRecord)) {
-      const masksRecord = getLayerMasksRecord(layerId)
-      if (!masksRecord || !(frameId in masksRecord)) continue
+      const frameMasks = getFrameMasks(layerId, frameId)
+      if (!frameMasks) continue
 
-      const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
-      const innerLens = maskLens.focus("inner")
-      const outerLens = maskLens.focus("outer")
-      const maskData = maskLens.syncGet()
-      const pathKey = `${layerId}:${frameId}`
-      const bp = new BezierPath(innerLens, pathsLayer, {
-        onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
-        color: (layerData as any).color,
-        fillOpacity: 0.25,
-        outerLens,
-        bufferDistance: maskData?.bufferDistance ?? 20,
-        outerMode: maskData?.outerMode ?? "uniform",
-        maskLens,
-      })
-      bp.setActive(false)
-      MutableHashMap.set(paths, pathKey, bp)
+      for (const [maskId, _maskData] of Object.entries(frameMasks)) {
+        const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId).focus(maskId)
+        const innerLens = maskLens.focus("inner")
+        const outerLens = maskLens.focus("outer")
+        const maskData = maskLens.syncGet()
+        const pathKey = `${layerId}:${frameId}:${maskId}`
+        const bp = new BezierPath(innerLens, pathsLayer, {
+          onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
+          color: (layerData as any).color,
+          fillOpacity: 0.25,
+          outerLens,
+          bufferDistance: maskData?.bufferDistance ?? 20,
+          outerMode: maskData?.outerMode ?? "uniform",
+          maskLens,
+        })
+        bp.setActive(false)
+        MutableHashMap.set(paths, pathKey, bp)
+      }
     }
   }
 
@@ -201,45 +210,49 @@ export const canvasAtom = Atom.make((get) => {
     const layerData = (root.focus("layers").focus(layerId) as any).syncGet()
     const layerColor = layerData?.color as string | undefined
 
-    // Active layer mask
-    const masksRecord = getLayerMasksRecord(layerId)
-    if (masksRecord && frameId in masksRecord) {
-      const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId)
-      const innerLens = maskLens.focus("inner")
-      const outerLens = maskLens.focus("outer")
-      const maskData = maskLens.syncGet()
-      const pathKey = `${layerId}:${frameId}`
+    // Active layer masks
+    const frameMasks = getFrameMasks(layerId, frameId)
+    if (frameMasks) {
       const activePathId = getActivePathId()
-      const bp = new BezierPath(innerLens, pathsLayer, {
-        onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
-        color: layerColor,
-        fillOpacity: 0.35,
-        outerLens,
-        bufferDistance: maskData?.bufferDistance ?? 20,
-        outerMode: maskData?.outerMode ?? "uniform",
-        onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
-        maskLens,
-      })
-      bp.setActive(pathKey === activePathId)
-      MutableHashMap.set(paths, pathKey, bp)
+      for (const [maskId, _maskData] of Object.entries(frameMasks)) {
+        const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId).focus(maskId)
+        const innerLens = maskLens.focus("inner")
+        const outerLens = maskLens.focus("outer")
+        const maskData = maskLens.syncGet()
+        const pathKey = `${layerId}:${frameId}:${maskId}`
+        const bp = new BezierPath(innerLens, pathsLayer, {
+          onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
+          color: layerColor,
+          fillOpacity: 0.35,
+          outerLens,
+          bufferDistance: maskData?.bufferDistance ?? 20,
+          outerMode: maskData?.outerMode ?? "uniform",
+          onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+          maskLens,
+        })
+        bp.setActive(pathKey === activePathId)
+        MutableHashMap.set(paths, pathKey, bp)
+      }
     }
 
     // Other visible layers' masks (dimmed, fill-only)
     const allLayers = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
     for (const [otherId, otherData] of Object.entries(allLayers)) {
       if (otherId === layerId) continue
-      const otherMasks = getLayerMasksRecord(otherId)
-      if (!otherMasks || !(frameId in otherMasks)) continue
+      const otherFrameMasks = getFrameMasks(otherId, frameId)
+      if (!otherFrameMasks) continue
 
-      const otherMaskLens = (root.focus("layers").focus(otherId) as any).focus("masks").focus(frameId)
-      const otherInnerLens = otherMaskLens.focus("inner")
-      const otherKey = `${otherId}:${frameId}`
-      const bp = new BezierPath(otherInnerLens, pathsLayer, {
-        color: (otherData as any).color,
-        fillOpacity: 0.15,
-      })
-      bp.setActive(false)
-      MutableHashMap.set(paths, otherKey, bp)
+      for (const [maskId, _maskData] of Object.entries(otherFrameMasks)) {
+        const otherMaskLens = (root.focus("layers").focus(otherId) as any).focus("masks").focus(frameId).focus(maskId)
+        const otherInnerLens = otherMaskLens.focus("inner")
+        const otherKey = `${otherId}:${frameId}:${maskId}`
+        const bp = new BezierPath(otherInnerLens, pathsLayer, {
+          color: (otherData as any).color,
+          fillOpacity: 0.15,
+        })
+        bp.setActive(false)
+        MutableHashMap.set(paths, otherKey, bp)
+      }
     }
   }
 
@@ -358,6 +371,7 @@ export const canvasAtom = Atom.make((get) => {
   get.subscribe(drawingStateAtom, (result) => {
     const state = result._tag === "Success" ? result.value : "idle"
     if (prevDrawingState !== "idle" && state === "idle" && currentFrameId) {
+      activeMaskId = null
       syncPaths(currentFrameId)
     }
     prevDrawingState = state
@@ -392,20 +406,25 @@ export const canvasAtom = Atom.make((get) => {
     const pos = getStagePointerPosition()
     if (!pos) return
 
-    const pathKey = `${activeLayerId}:${currentFrameId}`
-
-    if (!MutableHashMap.has(paths, pathKey)) {
+    // Reuse active mask if one exists, otherwise create a new one
+    if (!activeMaskId || !MutableHashMap.has(paths, `${activeLayerId}:${currentFrameId}:${activeMaskId}`)) {
       const layerData = (root.focus("layers").focus(activeLayerId) as any).syncGet()
-      const maskLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId)
-      const existingMask = maskLens.syncGet()
-      if (!existingMask) {
-        ;(maskLens as any).syncSet({
-          inner: [],
-          outer: [],
-          bufferDistance: 20,
-          outerMode: "uniform",
-        })
+      const frameMasksLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId)
+      const existingFrameMasks = frameMasksLens.syncGet()
+      if (!existingFrameMasks) {
+        ;(frameMasksLens as any).syncSet({})
       }
+      activeMaskId = crypto.randomUUID()
+      const maskLens = frameMasksLens.focus(activeMaskId)
+      ;(maskLens as any).syncSet({
+        name: null,
+        inner: [],
+        outer: [],
+        bufferDistance: 20,
+        outerMode: "uniform",
+      })
+
+      const pathKey = `${activeLayerId}:${currentFrameId}:${activeMaskId}`
       const innerLens = maskLens.focus("inner")
       const outerLens = maskLens.focus("outer")
       const bp = new BezierPath(innerLens, pathsLayer, {
@@ -424,6 +443,7 @@ export const canvasAtom = Atom.make((get) => {
       pathsLayer.moveToTop()
     }
 
+    const pathKey = `${activeLayerId}:${currentFrameId}:${activeMaskId}`
     const bp = MutableHashMap.get(paths, pathKey)
     if (bp._tag !== "Some") return
 
@@ -442,6 +462,7 @@ export const canvasAtom = Atom.make((get) => {
       if (dist < closeThreshold) {
         // Close the path: append a point at exactly the first point's position
         bp.value.appendPoint(first.x, first.y)
+        activeMaskId = null
         canvasActor?.sendSync(CanvasEvent.ClosePath)
         return
       }
@@ -478,9 +499,9 @@ export const canvasAtom = Atom.make((get) => {
     isDraggingNewHandle = true
 
     const activeLayerId = getActiveLayerId()
-    if (!activeLayerId || !currentFrameId) return
+    if (!activeLayerId || !currentFrameId || !activeMaskId) return
 
-    const maskLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId)
+    const maskLens = (root.focus("layers").focus(activeLayerId) as any).focus("masks").focus(currentFrameId).focus(activeMaskId)
     const innerLens = maskLens.focus("inner")
     const nodeLens = innerLens.find(newPointId)
 

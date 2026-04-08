@@ -121,28 +121,31 @@ export const editMaskModeAtom = Atom.make((get): boolean => {
 
 /** Whether the active layer has a mask on the current frame */
 export const currentFrameHasMaskAtom = Atom.make((get): boolean => {
+  return get(currentFrameMaskCountAtom) > 0
+})
+
+/** Number of masks on the current frame for the active layer */
+export const currentFrameMaskCountAtom = Atom.make((get): number => {
   const layerIdResult = get(activeLayerIdAtom)
-  if (!Result.isSuccess(layerIdResult) || !layerIdResult.value) return false
+  if (!Result.isSuccess(layerIdResult) || !layerIdResult.value) return 0
   const layerId = layerIdResult.value
 
   const layersResult = get(layersAtom)
-  if (!Result.isSuccess(layersResult)) return false
+  if (!Result.isSuccess(layersResult)) return 0
   const layer = layersResult.value.find((l) => l.id === layerId)
-  if (!layer) return false
+  if (!layer) return 0
 
   const framesResult = get(framesAtom)
-  if (!Result.isSuccess(framesResult)) return false
-  const frames = framesResult.value
-
+  if (!Result.isSuccess(framesResult)) return 0
   const currentResult = get(currentFrameAtom)
-  if (!Result.isSuccess(currentResult)) return false
-  const currentIdx = currentResult.value as number
-
-  const frame = frames[currentIdx]
-  if (!frame) return false
+  if (!Result.isSuccess(currentResult)) return 0
+  const frame = framesResult.value[currentResult.value as number]
+  if (!frame) return 0
 
   const masks = (layer as any).masks ?? {}
-  return frame.id in masks
+  const frameMasks = masks[frame.id]
+  if (!frameMasks || typeof frameMasks !== "object") return 0
+  return Object.keys(frameMasks).length
 })
 
 /** Whether the active layer has a mask on the previous frame (currentFrame - 1) */
@@ -169,7 +172,8 @@ export const previousFrameMaskExistsAtom = Atom.make((get): boolean => {
   if (!prevFrame) return false
 
   const masks = (layer as any).masks ?? {}
-  return prevFrame.id in masks
+  const frameMasks = masks[prevFrame.id]
+  return frameMasks && typeof frameMasks === "object" && Object.keys(frameMasks).length > 0
 })
 
 /** Buffer distance of the active mask on the current frame */
@@ -195,8 +199,10 @@ export const maskBufferDistanceAtom = Atom.make((get): number => {
   if (!frame) return 20
 
   const masks = (layer as any).masks ?? {}
-  const mask = masks[frame.id]
-  return mask?.bufferDistance ?? 20
+  const frameMasks = masks[frame.id]
+  if (!frameMasks || typeof frameMasks !== "object") return 20
+  const firstMask = Object.values(frameMasks)[0] as any
+  return firstMask?.bufferDistance ?? 20
 })
 
 /** Outer mode of the active mask on the current frame */
@@ -222,8 +228,10 @@ export const maskOuterModeAtom = Atom.make((get): "uniform" | "free" => {
   if (!frame) return "uniform"
 
   const masks = (layer as any).masks ?? {}
-  const mask = masks[frame.id]
-  return mask?.outerMode ?? "uniform"
+  const frameMasks = masks[frame.id]
+  if (!frameMasks || typeof frameMasks !== "object") return "uniform"
+  const firstMask = Object.values(frameMasks)[0] as any
+  return firstMask?.outerMode ?? "uniform"
 })
 
 /** Set buffer distance on the current mask */
@@ -246,7 +254,11 @@ export const setBufferDistanceAtom = projectDocRuntime.fn(
     if (!layerMap) return
     const masksMap = layerMap.get("masks") as any
     if (!masksMap) return
-    const maskMap = masksMap.get(frame.id) as any
+    const frameMasksMap = masksMap.get(frame.id) as any
+    if (!frameMasksMap) return
+    const firstMaskId = frameMasksMap.keys().next().value
+    if (!firstMaskId) return
+    const maskMap = frameMasksMap.get(firstMaskId) as any
     if (!maskMap) return
     maskMap.set("bufferDistance", distance)
   }),
@@ -272,7 +284,11 @@ export const setOuterModeAtom = projectDocRuntime.fn(
     if (!layerMap) return
     const masksMap = layerMap.get("masks") as any
     if (!masksMap) return
-    const maskMap = masksMap.get(frame.id) as any
+    const frameMasksMap = masksMap.get(frame.id) as any
+    if (!frameMasksMap) return
+    const firstMaskId = frameMasksMap.keys().next().value
+    if (!firstMaskId) return
+    const maskMap = frameMasksMap.get(firstMaskId) as any
     if (!maskMap) return
     maskMap.set("outerMode", mode)
   }),
@@ -423,14 +439,24 @@ export const copyMaskFromPreviousAtom = projectDocRuntime.fn(
     if (!prevFrame || !currFrame) return
 
     entry.doc.transact(() => {
-      const srcPoints = entry.root
+      const prevFrameMasks = entry.root
         .focus("layers").focus(activeLayerId).focus("masks").focus(prevFrame.id)
-        .syncGet()
+        .syncGet() as Record<string, any> | undefined
 
-      if (srcPoints) {
-        ;(entry.root
-          .focus("layers").focus(activeLayerId).focus("masks").focus(currFrame.id) as any)
-          .syncSet(srcPoints)
+      if (prevFrameMasks) {
+        const currFrameLens = entry.root
+          .focus("layers").focus(activeLayerId).focus("masks").focus(currFrame.id) as any
+
+        // Ensure frame record exists
+        if (!currFrameLens.syncGet()) {
+          currFrameLens.syncSet({})
+        }
+
+        // Copy each mask with a new ID
+        for (const [_oldMaskId, maskData] of Object.entries(prevFrameMasks)) {
+          const newMaskId = crypto.randomUUID()
+          ;(currFrameLens.focus(newMaskId) as any).syncSet(maskData)
+        }
       }
     })
   }),

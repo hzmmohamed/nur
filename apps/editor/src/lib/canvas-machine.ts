@@ -31,6 +31,7 @@ export const CanvasState = State({
   },
   EditMask: {
     layerId: S.String,
+    maskId: S.String,
     mode: S.Literal("uniform", "free"),
     target: S.Literal("inner", "outer"),
   },
@@ -47,7 +48,7 @@ export const CanvasEvent = Event({
   ClosePath: {},
   CommitMask: {},
   DiscardMask: {},
-  EnterEditMask: {},
+  EnterEditMask: { maskId: S.String },
   ExitEditMask: {},
   SetOuterMode: { mode: S.Literal("uniform", "free") },
   SetEditingTarget: { target: S.Literal("inner", "outer") },
@@ -125,8 +126,8 @@ export const canvasMachine = Machine.make({
   )
 
   // Editing → EditMask
-  .on(CanvasState.Editing, CanvasEvent.EnterEditMask, ({ state }) =>
-    CanvasState.EditMask({ layerId: state.layerId, mode: "uniform", target: "inner" }),
+  .on(CanvasState.Editing, CanvasEvent.EnterEditMask, ({ state, event }) =>
+    CanvasState.EditMask({ layerId: state.layerId, maskId: event.maskId, mode: "uniform", target: "inner" }),
   )
 
   // EditMask → Editing (back)
@@ -164,6 +165,12 @@ export const canvasMachine = Machine.make({
 export const canvasMachineStateAtom = Atom.make<CanvasStateType>(
   { _tag: "Viewing" } as CanvasStateType,
 )
+
+/** @derived from canvas machine — do not set directly */
+export const editingMaskIdAtom = Atom.make((get): string | null => {
+  const state = get(canvasMachineStateAtom)
+  return state._tag === "EditMask" ? (state as any).maskId : null
+})
 
 // ── Actor Reference ─────────────────────────────────────────
 

@@ -10,6 +10,13 @@
 
 - [ ] Show number of masks in the frame canvas bar. Show tooltip with number of masks for timeline slots
 
+- In-place edit of layer name trigers but keyboard presses don't type anything
+-Add colorpicker
+- Reactions of the mask renderer to the machine state need fixing
+- shapes change position with horizonal resizing 
+- Perhaps we need to express the position of the mask vertices relative to the frame not the stage. That is the same if the frame does not move which it does not
+- Add ruler
+- Left panel will include a list of masks in the frame and a list of masks for the focused layer
 ## Architecture
 
 - [x] **Model project states, not just data** — Guide the user through the project lifecycle with explicit states (empty → importing → editing → exporting) rather than deriving UI from raw data presence. Use effect-machine or awareness state to represent which phase the project is in, and render purpose-built UI for each phase
