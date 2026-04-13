@@ -8,6 +8,7 @@ import type { TreeNodeNested, TreeNodeRenderProps } from "@/lib/tree-types"
 import type { Layer, LayerGroup } from "@nur/core"
 import { appRegistry } from "../lib/atom-registry"
 import { canvasActor, CanvasEvent } from "../lib/canvas-machine"
+import { snapshotRowPositions } from "./timeline-flip"
 import {
   layersAtom,
   layerGroupsAtom,
@@ -318,6 +319,7 @@ function LayerNodeRenderer({
         isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
       }${!isVisible ? " opacity-40" : ""}`}
       style={{ height: ROW_H, paddingLeft: depth * 16 + 4 }}
+      data-testid="layer-row"
       onClick={(e) => {
         e.stopPropagation()
         if (data.type === "layer") {
@@ -357,6 +359,7 @@ function LayerNodeRenderer({
           onToggleVisibility(data.layerId)
         }}
         title={isVisible ? "Hide" : "Show"}
+        data-testid="layer-visibility-toggle"
       >
         {isVisible ? <EyeIcon className="size-3" /> : <EyeOffIcon className="size-3" />}
       </button>
@@ -377,6 +380,7 @@ function LayerNodeRenderer({
           className="flex-1 min-w-0 bg-transparent text-xs outline-none border-b border-accent-foreground/40 px-0.5"
           value={editingName}
           autoFocus
+          data-testid="layer-name-input"
           onChange={(e) => onEditChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -394,6 +398,7 @@ function LayerNodeRenderer({
       ) : (
         <span
           className="text-xs truncate flex-1 min-w-0"
+          data-testid="layer-name"
           onDoubleClick={(e) => {
             e.stopPropagation()
             if (data.type === "layer") {
@@ -666,7 +671,10 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
             selectedIds={selectedIds}
             onSelectedIdsChange={handleSelectedIdsChange}
             expandedIds={expandedIds}
-            onExpandedIdsChange={(ids) => setExpandedIds(ids)}
+            onExpandedIdsChange={(ids) => {
+              snapshotRowPositions(treeItems, expandedIds)
+              setExpandedIds(ids)
+            }}
             draggable
             droppable
             showGuideLines={false}

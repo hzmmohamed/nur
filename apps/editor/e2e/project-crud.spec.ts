@@ -1,22 +1,10 @@
 import { test, expect } from "@playwright/test"
+import { resetAppState, completeOnboarding } from "./helpers"
 
 test.describe("Project management", () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate and clear all NUR databases
-    await page.goto("/")
-    await page.evaluate(async () => {
-      // Close any open y-indexeddb connections by destroying docs
-      // Then delete the databases
-      const dbs = await indexedDB.databases()
-      for (const db of dbs) {
-        if (db.name?.startsWith("nur-")) {
-          indexedDB.deleteDatabase(db.name)
-        }
-      }
-    })
-    // Hard reload to get a fresh app state (clears module singletons)
-    await page.reload()
-    await page.getByText("NUR").waitFor({ timeout: 10000 })
+    await resetAppState(page)
+    await completeOnboarding(page)
   })
 
   test("shows empty state on first load", async ({ page }) => {
@@ -25,7 +13,7 @@ test.describe("Project management", () => {
 
   test("creates a project and navigates to editor", async ({ page }) => {
     await page.getByPlaceholder("New project name...").fill("Test Animation")
-    await page.getByRole("button", { name: "Create" }).click()
+    await page.getByRole("button", { name: "+ New Project" }).click()
     await expect(page).toHaveURL(/\/project\//)
     await expect(page.getByText("Test Animation")).toBeVisible()
   })
@@ -38,30 +26,32 @@ test.describe("Project management", () => {
 
   test("project persists after page reload", async ({ page }) => {
     await page.getByPlaceholder("New project name...").fill("Persistent Project")
-    await page.getByRole("button", { name: "Create" }).click()
+    await page.getByRole("button", { name: "+ New Project" }).click()
+    await expect(page).toHaveURL(/\/project\//)
 
-    // Navigate back and wait for project to appear in list
-    await page.getByText("Back").click()
+    // Navigate back home via the home icon button
+    await page.getByTitle("Home").click()
     await expect(page.getByText("Persistent Project")).toBeVisible({ timeout: 10000 })
 
     // Ensure IndexedDB has time to flush writes before reload
     await page.waitForTimeout(500)
-    // Reload and verify persistence
     await page.reload()
     await expect(page.getByText("Persistent Project")).toBeVisible({ timeout: 10000 })
   })
 
   test("deletes a project", async ({ page }) => {
-    await page.getByPlaceholder("New project name...").fill("Delete Me")
-    await page.getByRole("button", { name: "Create" }).click()
+    const projectName = "Delete Me"
+    await page.getByPlaceholder("New project name...").fill(projectName)
+    await page.getByRole("button", { name: "+ New Project" }).click()
+    await expect(page).toHaveURL(/\/project\//)
 
-    // Navigate back and wait for project to appear
-    await page.getByText("Back").click()
-    await expect(page.getByText("Delete Me")).toBeVisible({ timeout: 10000 })
+    // Navigate back home
+    await page.getByTitle("Home").click()
+    await expect(page.getByText(projectName)).toBeVisible({ timeout: 10000 })
 
-    // Delete
-    await page.getByRole("button", { name: "Delete" }).click()
-    await expect(page.getByText("Delete Me")).not.toBeVisible()
+    // Delete via icon button (aria-label includes project name)
+    await page.getByRole("button", { name: `Delete project ${projectName}` }).click()
+    await expect(page.getByText(projectName)).not.toBeVisible()
     await expect(page.getByText("No projects yet")).toBeVisible()
   })
 })
