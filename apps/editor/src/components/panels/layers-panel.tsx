@@ -1,6 +1,5 @@
-import { useState } from "react"
-import { Result } from "@effect-atom/atom"
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { Atom, Result } from "@effect-atom/atom"
+import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   layersAtom,
   activeLayerIdAtom,
@@ -11,6 +10,8 @@ import { canvasActor, CanvasEvent } from "../../lib/canvas-machine"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+const newLayerNameAtom = Atom.make("")
+
 export function LayersPanel() {
   const layersResult = useAtomValue(layersAtom)
   const layers = Result.isSuccess(layersResult) ? layersResult.value : []
@@ -19,7 +20,7 @@ export function LayersPanel() {
   const createLayer = useAtomSet(createLayerAtom)
   const deleteLayer = useAtomSet(deleteLayerAtom)
 
-  const [newLayerName, setNewLayerName] = useState("")
+  const [newLayerName, setNewLayerName] = useAtom(newLayerNameAtom)
 
   const handleCreate = () => {
     const trimmed = newLayerName.trim()

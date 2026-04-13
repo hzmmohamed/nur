@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
@@ -46,6 +46,23 @@ const ROW_H = 28 // must match timeline grid row height
 /** Shared expanded group IDs — read by Timeline for SVG row positioning */
 export const expandedGroupIdsAtom = Atom.make<string[]>([])
 
+// -- Local UI state atoms --
+const editingIdAtom = Atom.make<string | null>(null)
+const editingNameAtom = Atom.make("")
+const hoveredIdAtom = Atom.make<string | null>(null)
+
+// Auto-expand new groups: subscribe to layerGroupsAtom and expand any new group tree IDs
+appRegistry.subscribe(layerGroupsAtom, (groupsResult) => {
+  const groups = Result.isSuccess(groupsResult) ? groupsResult.value : []
+  const allGroupTreeIds = groups.map((g) => `group-${g.id}`)
+  if (allGroupTreeIds.length === 0) return
+  const current = appRegistry.get(expandedGroupIdsAtom)
+  const newIds = allGroupTreeIds.filter((id) => !current.includes(id))
+  if (newIds.length > 0) {
+    appRegistry.set(expandedGroupIdsAtom, [...current, ...newIds])
+  }
+})
+
 const visibilityRuntime = Atom.runtime(BrowserKeyValueStore.layerLocalStorage)
 
 /** Layer/group visibility — persisted to localStorage.
@@ -88,11 +105,11 @@ export function buildTree(
   layers: Array<Layer & { id: string }>,
   groups: Array<LayerGroup & { id: string }>,
 ): TreeNodeNested<LayerNodeData>[] {
-  const groupMap = new Map<string, TreeNodeNested<LayerNodeData>>()
+  const groupMap: Record<string, TreeNodeNested<LayerNodeData>> = {}
 
   // Create group nodes
   for (const group of groups) {
-    groupMap.set(group.id, {
+    groupMap[group.id] = {
       id: `group-${group.id}`,
       isGroup: true,
       data: {
@@ -102,7 +119,7 @@ export function buildTree(
         layerId: group.id,
       },
       children: [],
-    })
+    }
   }
 
   const rootNodes: TreeNodeNested<LayerNodeData>[] = []
@@ -119,8 +136,8 @@ export function buildTree(
       },
     }
 
-    if (layer.groupId && groupMap.has(layer.groupId)) {
-      groupMap.get(layer.groupId)!.children!.push(layerNode)
+    if (layer.groupId && groupMap[layer.groupId]) {
+      groupMap[layer.groupId].children!.push(layerNode)
     } else {
       rootNodes.push(layerNode)
     }
@@ -137,7 +154,7 @@ export function buildTree(
   }
 
   for (const group of groups) {
-    const groupNode = groupMap.get(group.id)!
+    const groupNode = groupMap[group.id]
     combined.push({ sortKey: group.index, node: groupNode })
   }
 
@@ -468,21 +485,6 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
   const [expandedIds, setExpandedIds] = useAtom(expandedGroupIdsAtom)
   const [visibilityMap] = useAtom(layerVisibilityAtom)
 
-  // Auto-expand new groups
-  const allGroupTreeIds = useMemo(() => groups.map((g) => `group-${g.id}`), [groups])
-  const prevGroupCountRef = useMemo(() => ({ current: groups.length }), [])
-  useMemo(() => {
-    // On first render or when groups are added, expand all
-    if (expandedIds.length === 0 && allGroupTreeIds.length > 0) {
-      setExpandedIds(allGroupTreeIds)
-    } else if (allGroupTreeIds.length > prevGroupCountRef.current) {
-      // New group added — expand it
-      const newIds = allGroupTreeIds.filter((id) => !expandedIds.includes(id))
-      if (newIds.length > 0) setExpandedIds([...expandedIds, ...newIds])
-    }
-    prevGroupCountRef.current = groups.length
-  }, [allGroupTreeIds])
-
   // -- Atom setters --
   const renameLayer = useAtomSet(renameLayerAtom)
   const duplicateLayer = useAtomSet(duplicateLayerAtom)
@@ -493,18 +495,15 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
   const deleteLayerGroup = useAtomSet(deleteLayerGroupAtom)
 
   // -- Local UI state --
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState("")
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useAtom(editingIdAtom)
+  const [editingName, setEditingName] = useAtom(editingNameAtom)
+  const [hoveredId, setHoveredId] = useAtom(hoveredIdAtom)
 
   // -- Derived tree data --
-  const treeItems = useMemo(() => buildTree(layers, groups), [layers, groups])
+  const treeItems = buildTree(layers, groups)
 
   // -- Selection (maps activeLayerIdAtom to TreeView selectedIds) --
-  const selectedIds = useMemo(
-    () => (activeLayerId ? [activeLayerId] : []),
-    [activeLayerId],
-  )
+  const selectedIds = activeLayerId ? [activeLayerId] : []
 
   const handleSelectedIdsChange = useCallback(
     (ids: string[]) => {

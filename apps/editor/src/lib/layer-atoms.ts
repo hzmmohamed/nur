@@ -65,10 +65,10 @@ export const layersAtom = (() => {
     let layers: Array<Layer & { id: string }>
     if (layerOrderIds.length > 0) {
       // Order by layerOrder, derive groupId from it
-      const groupIdMap = new Map<string, string | null>()
+      const groupIdMap: Record<string, string | null> = {}
       for (const entry of order) {
         if (entry.type === "layer") {
-          groupIdMap.set(entry.id, entry.parentId)
+          groupIdMap[entry.id] = entry.parentId
         }
       }
       layers = layerOrderIds
@@ -76,7 +76,7 @@ export const layersAtom = (() => {
         .map((id) => ({
           ...record[id],
           id,
-          groupId: groupIdMap.get(id) ?? record[id].groupId,
+          groupId: groupIdMap[id] ?? record[id].groupId,
         }))
     } else {
       // Fallback: sort by index (for existing projects without layerOrder)

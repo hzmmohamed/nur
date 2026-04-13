@@ -2,7 +2,21 @@ import tseslint from "typescript-eslint"
 
 export default tseslint.config(
   {
-    ignores: ["src/components/ui/**", "src/routeTree.gen.ts"],
+    ignores: [
+      "src/components/ui/**",
+      "src/routeTree.gen.ts",
+      // Generic tree library — uses standard React hooks internally
+      "src/components/tree-node.tsx",
+      "src/components/tree-view.tsx",
+      "src/components/tree-drop-indicator.tsx",
+      "src/hooks/use-tree-dnd.ts",
+      "src/hooks/use-tree-lazy.ts",
+      "src/hooks/use-tree-state.ts",
+      "src/hooks/use-tree-keyboard.ts",
+      "src/lib/tree-context.ts",
+      "src/lib/tree-types.ts",
+      "src/lib/tree-utils.ts",
+    ],
   },
   {
     files: ["src/**/*.{ts,tsx}"],

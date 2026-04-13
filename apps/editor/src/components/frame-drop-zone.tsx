@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react"
+import { useCallback } from "react"
 import { Atom } from "@effect-atom/atom"
 import { useAtom } from "@effect-atom/atom-react/Hooks"
 import type { ImportProgress } from "../lib/import-atoms"
 
 const dragOverAtom = Atom.make(false)
+const rejectedAtom = Atom.make<string[]>([])
 
 function validateFiles(files: DataTransfer | FileList): { valid: File[]; rejected: string[] } {
   const all = files instanceof DataTransfer ? Array.from(files.files) : Array.from(files)
@@ -25,7 +26,7 @@ export function FrameDropZone(props: {
   isImporting: boolean
 }) {
   const [dragOver, setDragOver] = useAtom(dragOverAtom)
-  const [rejected, setRejected] = useState<string[]>([])
+  const [rejected, setRejected] = useAtom(rejectedAtom)
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()

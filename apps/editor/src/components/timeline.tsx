@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react"
+import { useRef, useCallback } from "react"
 import { Atom, Result } from "@effect-atom/atom"
 import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
@@ -66,6 +66,7 @@ const scrollPositionAtom = Atom.kvs({
 }).pipe(Atom.keepAlive)
 
 const isScrubbingAtom = Atom.make(false)
+const gridContainerHeightAtom = Atom.make(200)
 
 // -- Scrubbing --
 
@@ -101,9 +102,9 @@ interface GroupRowInfo {
 function computeVisualRowMap(
   tree: TreeNodeNested<LayerNodeData>[],
   expandedIds: string[],
-): { layerRows: Map<string, number>; groupRows: GroupRowInfo[]; totalRows: number } {
+): { layerRows: Record<string, number>; groupRows: GroupRowInfo[]; totalRows: number } {
   const expandedSet = new Set(expandedIds)
-  const layerRows = new Map<string, number>()
+  const layerRows: Record<string, number> = {}
   const groupRows: GroupRowInfo[] = []
   let row = 0
 
@@ -126,7 +127,7 @@ function computeVisualRowMap(
           walk(node.children)
         }
       } else {
-        layerRows.set(node.data.layerId, row)
+        layerRows[node.data.layerId] = row
         row++
       }
     }
@@ -152,12 +153,12 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
 
   // Build tree and compute visual row positions (groups take rows but don't get tracks)
   const expandedIds = useAtomValue(expandedGroupIdsAtom)
-  const treeItems = useMemo(() => buildTree(layers, groups), [layers, groups])
-  const { layerRows, groupRows, totalRows } = useMemo(() => computeVisualRowMap(treeItems, expandedIds), [treeItems, expandedIds])
+  const treeItems = buildTree(layers, groups)
+  const { layerRows, groupRows, totalRows } = computeVisualRowMap(treeItems, expandedIds)
 
   const gridRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
-  const [gridContainerHeight, setGridContainerHeight] = useState(200)
+  const [gridContainerHeight, setGridContainerHeight] = useAtom(gridContainerHeightAtom)
 
   const cellW = CELL_W * zoomLevel
   const gridWidth = Math.max(frameCount * cellW, 200)
@@ -176,13 +177,10 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
   )
 
   // Reverse map: visual row index -> layer id
-  const rowToLayerId = useMemo(() => {
-    const map = new Map<number, string>()
-    for (const [layerId, row] of layerRows) {
-      map.set(row, layerId)
-    }
-    return map
-  }, [layerRows])
+  const rowToLayerId: Record<number, string> = {}
+  for (const [layerId, row] of Object.entries(layerRows)) {
+    rowToLayerId[row] = layerId
+  }
 
   const positionToLayerId = useCallback(
     (clientY: number): string | null => {
@@ -191,9 +189,9 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
       const y = clientY - rect.top + gridRef.current.scrollTop - HEADER_H
       if (y < 0) return null
       const row = Math.floor(y / ROW_H)
-      return rowToLayerId.get(row) ?? null
+      return rowToLayerId[row] ?? null
     },
-    [rowToLayerId],
+    [layerRows],
   )
 
   scrubbingCallback = (clientX: number) => {
@@ -233,22 +231,18 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
     }
   }, [])
 
-  // Restore scroll position on mount
-  useEffect(() => {
-    if (gridRef.current) {
-      const saved = appRegistry.get(scrollPositionAtom)
-      gridRef.current.scrollLeft = saved.x
-      gridRef.current.scrollTop = saved.y
-      if (labelRef.current) {
-        labelRef.current.scrollTop = saved.y
-      }
-    }
-  }, [])
-
   // Zoom with ctrl+scroll
   const gridRefCallback = useCallback((el: HTMLDivElement | null) => {
     ;(gridRef as any).current = el
     if (!el) return
+
+    // Restore scroll position on mount
+    const saved = appRegistry.get(scrollPositionAtom)
+    el.scrollLeft = saved.x
+    el.scrollTop = saved.y
+    if (labelRef.current) {
+      labelRef.current.scrollTop = saved.y
+    }
 
     // Measure container height for full-height slots
     const observer = new ResizeObserver((entries) => {
@@ -415,7 +409,7 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
 
           {/* Frame-layer intersection slots (only for layer rows, not group rows) */}
           {layers.map((layer) => {
-            const visualRow = layerRows.get(layer.id)
+            const visualRow = layerRows[layer.id]
             if (visualRow === undefined) return null
             const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
             return Array.from({ length: frameCount }, (_, frameIdx) => {
@@ -452,13 +446,13 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
           {groupRows.filter((gr) => !gr.isExpanded).map((gr) => {
             // Collect all mask frame IDs from child layers
             const childLayers = gr.childLayerIds.map((id) => layers.find((l) => l.id === id)).filter(Boolean)
-            const masksByFrame = new Map<number, string[]>() // frameIdx -> [layer colors]
+            const masksByFrame: Record<number, string[]> = {} // frameIdx -> [layer colors]
             for (const layer of childLayers) {
               const maskFrameIds = new Set(Object.keys((layer as any).masks ?? {}))
               for (let fi = 0; fi < frameCount; fi++) {
                 if (maskFrameIds.has(frames[fi]?.id ?? "")) {
-                  if (!masksByFrame.has(fi)) masksByFrame.set(fi, [])
-                  masksByFrame.get(fi)!.push(layer!.color)
+                  if (!masksByFrame[fi]) masksByFrame[fi] = []
+                  masksByFrame[fi].push(layer!.color)
                 }
               }
             }
@@ -466,7 +460,7 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
             const y = HEADER_H + gr.visualRow * ROW_H
             return Array.from({ length: frameCount }, (_, frameIdx) => {
               const x = frameIdx * cellW
-              const colors = masksByFrame.get(frameIdx)
+              const colors = masksByFrame[frameIdx]
               return (
                 <g key={`gslot-${gr.groupId}-${frameIdx}`}>
                   <rect
@@ -493,7 +487,7 @@ export function Timeline({ frames, currentFrame, onFrameSelect, lastModified }: 
 
           {/* Active layer left indicator */}
           {activeLayerId && (() => {
-            const visualRow = layerRows.get(activeLayerId)
+            const visualRow = layerRows[activeLayerId]
             if (visualRow === undefined) return null
             return (
               <rect
