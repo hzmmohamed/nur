@@ -16,6 +16,10 @@
 - shapes change position with horizonal resizing 
 - Perhaps we need to express the position of the mask vertices relative to the frame not the stage. That is the same if the frame does not move which it does not
 - Add ruler
+- Change SVG timeline grid to use motion canvas (framer-motion)
+- Zoom is now always centered at the frame center
+- patheditor not getting disposed of (maybe effect-machine is the solution)
+- open paths are invalid data for the app. If the data decoding fails, a warning should be shown.
 - Left panel will include a list of masks in the frame and a list of masks for the focused layer
 
 
