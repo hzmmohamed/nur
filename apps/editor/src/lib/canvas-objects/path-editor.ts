@@ -37,6 +37,8 @@ interface PointObjects {
 export interface PathEditorOptions {
   appRegistry?: Registry.Registry
   onBufferChange?: (distance: number) => void
+  outerMode?: "uniform" | "free"
+  onClosePath?: () => void
 }
 
 export class PathEditor {
@@ -54,6 +56,14 @@ export class PathEditor {
   private currentZoom = 1
   private ghostSplitResult: ReturnType<typeof findNearestPointOnPath> | null = null
   private unsubscribeApp: (() => void) | null = null
+  private readonly onBufferChange?: (distance: number) => void
+  private readonly onClosePath?: () => void
+  private outerMode: "uniform" | "free"
+  // Pen drawing state
+  private dragOrigin: { x: number; y: number } | null = null
+  private newPointId: string | null = null
+  private isDraggingNewHandle = false
+  private static readonly DRAG_THRESHOLD = 3
 
   constructor(
     renderer: PathRenderer,
@@ -63,6 +73,9 @@ export class PathEditor {
     this.renderer = renderer
     this.handlesLayer = handlesLayer
     this.registry = Registry.make()
+    this.onBufferChange = options?.onBufferChange
+    this.onClosePath = options?.onClosePath
+    this.outerMode = options?.outerMode ?? "uniform"
 
     this.ghostVertex = new Konva.Circle({
       radius: POINT_RADIUS,
@@ -75,6 +88,7 @@ export class PathEditor {
 
     this.startStructuralLoop()
     this.startGhostHandlers()
+    this.startOuterDragHandler()
 
     // Self-subscribe to zoom
     if (options?.appRegistry) {
@@ -273,6 +287,54 @@ export class PathEditor {
     })
   }
 
+  private startOuterDragHandler(): void {
+    const outerPath = this.renderer.outerPathLineNode
+    let outerDragStart: { x: number; y: number; startBuffer: number } | null = null
+
+    outerPath.on("pointerdown.editor", (e) => {
+      if (this.outerMode !== "uniform") return
+      e.cancelBubble = true
+      const stage = this.handlesLayer.getStage()
+      if (!stage) return
+      const pos = stage.getPointerPosition()
+      if (!pos) return
+      outerDragStart = { x: pos.x, y: pos.y, startBuffer: this.renderer.currentBufferDistance }
+
+      const onMove = () => {
+        if (!outerDragStart) return
+        const stagePos = stage.getPointerPosition()
+        if (!stagePos) return
+        const dx = stagePos.x - outerDragStart.x
+        const dy = stagePos.y - outerDragStart.y
+        const delta = Math.sqrt(dx * dx + dy * dy) * Math.sign(dx + dy)
+        const zoom = stage.scaleX() || 1
+        const newBuffer = Math.max(2, Math.round(outerDragStart.startBuffer + delta / zoom))
+        this.renderer.setBufferDistance(newBuffer)
+        this.onBufferChange?.(newBuffer)
+      }
+
+      const onUp = () => {
+        outerDragStart = null
+        window.removeEventListener("mousemove", onMove)
+        window.removeEventListener("mouseup", onUp)
+      }
+
+      window.addEventListener("mousemove", onMove)
+      window.addEventListener("mouseup", onUp)
+    })
+
+    outerPath.on("pointerenter.editor", () => {
+      if (this.outerMode === "uniform") {
+        const s = this.handlesLayer.getStage()
+        if (s) s.container().style.cursor = "ew-resize"
+      }
+    })
+    outerPath.on("pointerleave.editor", () => {
+      const s = this.handlesLayer.getStage()
+      if (s) s.container().style.cursor = "default"
+    })
+  }
+
   private startAppSubscriptions(appRegistry: Registry.Registry): void {
     this.unsubscribeApp = appRegistry.subscribe(zoomAtom, (zoomResult) => {
       const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
@@ -356,6 +418,78 @@ export class PathEditor {
     return this.renderer.appendPoint(x, y)
   }
 
+  /**
+   * Handle a pen-tool pointer down in stage-local coordinates.
+   * When the path is unclosed: appends a point or closes the path.
+   * Returns true if the event was consumed (caller should cancelBubble).
+   */
+  handlePenDown(pos: { x: number; y: number }): boolean {
+    if (this.renderer.isClosed) return false
+
+    const points = this.renderer.getPoints()
+
+    // Close detection: click near first point with 3+ existing points
+    const closeThreshold = Math.max(10, 15 / this.currentZoom)
+    if (points.length >= 3) {
+      const first = points[0]
+      const dx = pos.x - first.x
+      const dy = pos.y - first.y
+      if (Math.sqrt(dx * dx + dy * dy) < closeThreshold) {
+        this.appendPoint(first.x, first.y)
+        this.dragOrigin = null
+        this.newPointId = null
+        this.onClosePath?.()
+        return true
+      }
+    }
+
+    // Skip if clicking on an existing point
+    if (points.length > 0) {
+      const hitThreshold = 8 / this.currentZoom
+      const nearExisting = points.some((pt) => {
+        const dx = pos.x - pt.x
+        const dy = pos.y - pt.y
+        return Math.sqrt(dx * dx + dy * dy) < hitThreshold
+      })
+      if (nearExisting) return false
+    }
+
+    const id = this.appendPoint(pos.x, pos.y)
+    this.dragOrigin = { x: pos.x, y: pos.y }
+    this.newPointId = id
+    this.isDraggingNewHandle = false
+    return true
+  }
+
+  /**
+   * Handle pointer move during pen drawing (drag to create handles).
+   * Only active after handlePenDown placed a new point.
+   */
+  handlePenMove(pos: { x: number; y: number }): void {
+    if (!this.dragOrigin || !this.newPointId) return
+
+    const dx = pos.x - this.dragOrigin.x
+    const dy = pos.y - this.dragOrigin.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (!this.isDraggingNewHandle && dist < PathEditor.DRAG_THRESHOLD) return
+    this.isDraggingNewHandle = true
+
+    const nodeLens = this.renderer.innerLens.find(this.newPointId)
+    const angle = Math.atan2(dy, dx)
+    nodeLens.focus("handleOutAngle").syncSet(angle)
+    nodeLens.focus("handleOutDistance").syncSet(dist)
+    nodeLens.focus("handleInAngle").syncSet(angle + Math.PI)
+    nodeLens.focus("handleInDistance").syncSet(dist)
+  }
+
+  /** Handle pointer up — end handle drag. */
+  handlePenUp(): void {
+    this.dragOrigin = null
+    this.newPointId = null
+    this.isDraggingNewHandle = false
+  }
+
   insertPointFromGhost(): void {
     const result = this.ghostSplitResult
     if (!result) return
@@ -382,6 +516,11 @@ export class PathEditor {
     pathLine.off("pointermove.editor")
     pathLine.off("pointerleave.editor")
     pathLine.off("pointerdown.editor")
+
+    const outerPath = this.renderer.outerPathLineNode
+    outerPath.off("pointerdown.editor")
+    outerPath.off("pointerenter.editor")
+    outerPath.off("pointerleave.editor")
 
     this.unsubscribeIds?.()
     HashMap.forEach(this.pointObjects, (objects) => {

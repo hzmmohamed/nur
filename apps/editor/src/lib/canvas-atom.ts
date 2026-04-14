@@ -157,22 +157,16 @@ export const canvasAtom = Atom.make((get) => {
     for (const [key, spec] of Object.entries(specs)) {
       if (MutableHashMap.has(paths, key)) continue
 
-      const maskLens = (root.focus("layers").focus(spec.layerId) as any)
+      const layerLens = root.focus("layers").focus(spec.layerId) as any
+      const maskLens = layerLens
         .focus("masks").focus(spec.frameId).focus(spec.maskId)
-      const innerLens = maskLens.focus("inner")
-      const outerLens = maskLens.focus("outer")
-      const maskData = maskLens.syncGet()
+      const colorLens = layerLens.focus("color")
 
-      const renderer = new PathRenderer(innerLens, pathsLayer, {
+      const renderer = new PathRenderer(maskLens, pathsLayer, {
         appRegistry,
         layerId: spec.layerId,
         onSelect: () => appRegistry.set(activePathIdRawAtom, key),
-        color: spec.color,
-        outerLens,
-        bufferDistance: maskData?.bufferDistance ?? 20,
-        outerMode: maskData?.outerMode ?? "uniform",
-        onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
-        maskLens,
+        colorLens,
       })
       MutableHashMap.set(paths, key, renderer)
     }
@@ -248,6 +242,7 @@ export const canvasAtom = Atom.make((get) => {
         activeEditor = new PathEditor(rendererOption.value, handlesLayer, {
           appRegistry,
           onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+          onClosePath: () => canvasActor?.sendSync(CanvasEvent.ClosePath),
         })
         activeEditorPathKey = activePathId
       }
@@ -300,8 +295,6 @@ export const canvasAtom = Atom.make((get) => {
       activePathIdRawAtom,
       setBufferDistanceAtom,
     },
-    canvasActor,
-    canvasEvent: { ClosePath: CanvasEvent.ClosePath },
     getCurrentFrameId: () => currentFrameId,
     getActiveEditor: () => activeEditor,
     isPanningOrSpaceHeld: () => spaceHeld || isPanning,
@@ -313,10 +306,19 @@ export const canvasAtom = Atom.make((get) => {
       activeEditorPathKey = pathKey
       appRegistry.set(activePathIdRawAtom, pathKey)
     },
-    createPathRenderer: (innerLens, opts) => new PathRenderer(innerLens, pathsLayer, opts),
+    createPathRenderer: (maskLens: any, layerId: string, onSelect?: () => void) => {
+      const colorLens = root.focus("layers").focus(layerId).focus("color") as any
+      return new PathRenderer(maskLens, pathsLayer, {
+        appRegistry,
+        layerId,
+        onSelect,
+        colorLens,
+      })
+    },
     createPathEditor: (renderer) => new PathEditor(renderer, handlesLayer, {
       appRegistry,
       onBufferChange: (dist: number) => appRegistry.set(setBufferDistanceAtom, dist),
+      onClosePath: () => canvasActor?.sendSync(CanvasEvent.ClosePath),
     }),
   })
 
