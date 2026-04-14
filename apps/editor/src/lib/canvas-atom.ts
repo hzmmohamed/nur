@@ -4,10 +4,11 @@ import * as MutableHashMap from "effect/MutableHashMap"
 import { activeEntryAtom, currentFrameAtom, framesAtom } from "./project-doc-atoms"
 import { activeToolAtom, activePathIdAtom, activePathIdRawAtom, drawingStateAtom } from "./path-atoms"
 import { canvasActor, CanvasEvent } from "./canvas-machine"
-import { activeLayerIdAtom, editMaskModeAtom, editingPathTargetAtom, setBufferDistanceAtom } from "./layer-atoms"
+import { activeLayerIdAtom, currentFrameMaskCountAtom, editingPathTargetAtom, setBufferDistanceAtom } from "./layer-atoms"
 import { zoomAtom, setZoomAtom, resetViewSignalAtom } from "./viewport-atoms"
 import { frameImageAtom } from "./frame-image-cache"
-import { BezierPath } from "./canvas-objects/bezier-curve"
+import { PathRenderer } from "./canvas-objects/path-renderer"
+import { PathEditor } from "./canvas-objects/path-editor"
 import { appRegistry } from "./atom-registry"
 import { stagePositionAtom, stageSizeAtom } from "../components/canvas-minimap"
 import { createModuleLogger } from "./logger"
@@ -44,9 +45,12 @@ export const canvasAtom = Atom.make((get) => {
   const pathsLayer = new Konva.Layer()
   stage.add(imageLayer)
   stage.add(pathsLayer)
+  const handlesLayer = new Konva.Layer()
+  stage.add(handlesLayer)
 
   let konvaImage: Konva.Image | null = null
-  const paths = MutableHashMap.empty<string, BezierPath>()
+  const paths = MutableHashMap.empty<string, PathRenderer>()
+  let activeEditor: PathEditor | null = null
   let currentFrameId: string | null = null
 
   // -- Pointer gesture state for pen tool --
@@ -127,7 +131,9 @@ export const canvasAtom = Atom.make((get) => {
   // -- Path management --
 
   function disposeAllPaths() {
-    MutableHashMap.forEach(paths, (bp) => bp.dispose())
+    activeEditor?.dispose()
+    activeEditor = null
+    MutableHashMap.forEach(paths, (renderer) => renderer.dispose())
     MutableHashMap.clear(paths)
   }
 
@@ -140,22 +146,22 @@ export const canvasAtom = Atom.make((get) => {
     if (frameId !== currentFrameId) {
       disposeAllPaths()
       pathsLayer.destroyChildren()
+      handlesLayer.destroyChildren()
       currentFrameId = frameId
     }
     if (!frameId) return
 
-    // Read masks from the active layer for this frame
     const activeLayerId = getActiveLayerId()
     if (!activeLayerId) {
-      // Preview mode — show all layers' masks (dimmed)
       syncAllLayerPaths(frameId)
     } else {
-      // Edit mode — show only active layer's masks
       syncLayerPaths(activeLayerId, frameId)
     }
 
     pathsLayer.moveToTop()
+    handlesLayer.moveToTop()
     pathsLayer.batchDraw()
+    handlesLayer.batchDraw()
   }
 
   function getLayerMasksRecord(layerId: string): Record<string, any> | null {
@@ -174,21 +180,23 @@ export const canvasAtom = Atom.make((get) => {
   }
 
   function syncAllLayerPaths(frameId: string) {
+    activeEditor?.dispose()
+    activeEditor = null
     disposeAllPaths()
     pathsLayer.destroyChildren()
+    handlesLayer.destroyChildren()
 
     const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
     for (const [layerId, layerData] of Object.entries(layersRecord)) {
       const frameMasks = getFrameMasks(layerId, frameId)
       if (!frameMasks) continue
-
       for (const [maskId, _maskData] of Object.entries(frameMasks)) {
         const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId).focus(maskId)
         const innerLens = maskLens.focus("inner")
         const outerLens = maskLens.focus("outer")
         const maskData = maskLens.syncGet()
         const pathKey = `${layerId}:${frameId}:${maskId}`
-        const bp = new BezierPath(innerLens, pathsLayer, {
+        const renderer = new PathRenderer(innerLens, pathsLayer, {
           onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
           color: (layerData as any).color,
           fillOpacity: 0.25,
@@ -197,30 +205,31 @@ export const canvasAtom = Atom.make((get) => {
           outerMode: maskData?.outerMode ?? "uniform",
           maskLens,
         })
-        bp.setActive(false)
-        MutableHashMap.set(paths, pathKey, bp)
+        MutableHashMap.set(paths, pathKey, renderer)
       }
     }
   }
 
   function syncLayerPaths(layerId: string, frameId: string) {
+    activeEditor?.dispose()
+    activeEditor = null
     disposeAllPaths()
     pathsLayer.destroyChildren()
+    handlesLayer.destroyChildren()
 
     const layerData = (root.focus("layers").focus(layerId) as any).syncGet()
     const layerColor = layerData?.color as string | undefined
+    const activePathId = getActivePathId()
 
-    // Active layer masks
     const frameMasks = getFrameMasks(layerId, frameId)
     if (frameMasks) {
-      const activePathId = getActivePathId()
       for (const [maskId, _maskData] of Object.entries(frameMasks)) {
         const maskLens = (root.focus("layers").focus(layerId) as any).focus("masks").focus(frameId).focus(maskId)
         const innerLens = maskLens.focus("inner")
         const outerLens = maskLens.focus("outer")
         const maskData = maskLens.syncGet()
         const pathKey = `${layerId}:${frameId}:${maskId}`
-        const bp = new BezierPath(innerLens, pathsLayer, {
+        const renderer = new PathRenderer(innerLens, pathsLayer, {
           onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
           color: layerColor,
           fillOpacity: 0.35,
@@ -230,8 +239,14 @@ export const canvasAtom = Atom.make((get) => {
           onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
           maskLens,
         })
-        bp.setActive(pathKey === activePathId)
-        MutableHashMap.set(paths, pathKey, bp)
+        MutableHashMap.set(paths, pathKey, renderer)
+
+        if (pathKey === activePathId) {
+          activeEditor = new PathEditor(renderer, handlesLayer, {
+            onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+          })
+          activeEditor.updateScale(getCurrentZoom())
+        }
       }
     }
 
@@ -241,17 +256,15 @@ export const canvasAtom = Atom.make((get) => {
       if (otherId === layerId) continue
       const otherFrameMasks = getFrameMasks(otherId, frameId)
       if (!otherFrameMasks) continue
-
-      for (const [maskId, _maskData] of Object.entries(otherFrameMasks)) {
+      for (const [maskId] of Object.entries(otherFrameMasks)) {
         const otherMaskLens = (root.focus("layers").focus(otherId) as any).focus("masks").focus(frameId).focus(maskId)
         const otherInnerLens = otherMaskLens.focus("inner")
         const otherKey = `${otherId}:${frameId}:${maskId}`
-        const bp = new BezierPath(otherInnerLens, pathsLayer, {
+        const renderer = new PathRenderer(otherInnerLens, pathsLayer, {
           color: (otherData as any).color,
           fillOpacity: 0.15,
         })
-        bp.setActive(false)
-        MutableHashMap.set(paths, otherKey, bp)
+        MutableHashMap.set(paths, otherKey, renderer)
       }
     }
   }
@@ -308,12 +321,21 @@ export const canvasAtom = Atom.make((get) => {
     applyFrame(frameData)
   })
 
-  // -- React to active path changes --
+  // -- React to active path changes — create/dispose PathEditor --
   get.subscribe(activePathIdAtom, (pathIdResult) => {
     const activePathId = pathIdResult._tag === "Success" ? pathIdResult.value : null
-    MutableHashMap.forEach(paths, (bp, id) => {
-      bp.setActive(id === activePathId)
-    })
+    activeEditor?.dispose()
+    activeEditor = null
+    if (activePathId) {
+      const rendererOption = MutableHashMap.get(paths, activePathId)
+      if (rendererOption._tag === "Some") {
+        activeEditor = new PathEditor(rendererOption.value, handlesLayer, {
+          onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+        })
+        activeEditor.updateScale(getCurrentZoom())
+      }
+    }
+    handlesLayer.batchDraw()
   })
 
   // -- React to zoom changes — scale stage --
@@ -328,7 +350,8 @@ export const canvasAtom = Atom.make((get) => {
       y: (stageH / 2) * (1 - 1 / zoom),
     })
     // Update all paths to compensate for zoom
-    MutableHashMap.forEach(paths, (bp) => bp.updateScale(zoom))
+    MutableHashMap.forEach(paths, (renderer) => renderer.updateScale(zoom))
+    activeEditor?.updateScale(zoom)
     appRegistry.set(stagePositionAtom, { x: stage.x(), y: stage.y() })
     stage.batchDraw()
   })
@@ -348,22 +371,16 @@ export const canvasAtom = Atom.make((get) => {
     }
   })
 
-  // -- React to editing target changes (inner/outer) — update active BezierPath --
-  get.subscribe(editingPathTargetAtom, (target) => {
-    MutableHashMap.forEach(paths, (bp) => {
-      bp.setEditingTarget(target)
-    })
-  })
-
-  // Buffer distance and outer mode are subscribed to directly from Y.Doc
-  // inside each BezierPath instance via maskLens — no need for indirect subscription here.
-
-  // -- React to edit mask mode changes — re-sync to show/hide point objects --
-  get.subscribe(editMaskModeAtom, (inEditMaskMode) => {
-    if (!inEditMaskMode && currentFrameId) {
-      // Exiting edit mask mode — re-sync to remove point objects
+  // -- React to mask count changes — re-sync when masks are added/removed (e.g. copy from previous) --
+  get.subscribe(currentFrameMaskCountAtom, () => {
+    if (currentFrameId) {
       syncPaths(currentFrameId)
     }
+  })
+
+  // -- React to editing target changes (inner/outer) — delegate to active editor --
+  get.subscribe(editingPathTargetAtom, (target) => {
+    activeEditor?.setEditingTarget(target)
   })
 
   // -- React to drawing state changes — re-sync when exiting drawing mode (done/discard) --
@@ -380,6 +397,11 @@ export const canvasAtom = Atom.make((get) => {
   function getDrawingState(): string {
     const result = appRegistry.get(drawingStateAtom) as any
     return result?._tag === "Success" ? result.value : "idle"
+  }
+
+  function getCurrentZoom(): number {
+    const r = appRegistry.get(zoomAtom) as any
+    return r?._tag === "Success" ? r.value : 1
   }
 
   /** Convert screen pointer position to stage-local coordinates */
@@ -427,7 +449,7 @@ export const canvasAtom = Atom.make((get) => {
       const pathKey = `${activeLayerId}:${currentFrameId}:${activeMaskId}`
       const innerLens = maskLens.focus("inner")
       const outerLens = maskLens.focus("outer")
-      const bp = new BezierPath(innerLens, pathsLayer, {
+      const renderer = new PathRenderer(innerLens, pathsLayer, {
         onSelect: () => appRegistry.set(activePathIdRawAtom, pathKey),
         color: layerData?.color,
         fillOpacity: 0.35,
@@ -437,22 +459,23 @@ export const canvasAtom = Atom.make((get) => {
         onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
         maskLens,
       })
-      bp.setActive(true)
-      MutableHashMap.set(paths, pathKey, bp)
+      MutableHashMap.set(paths, pathKey, renderer)
+
+      activeEditor?.dispose()
+      activeEditor = new PathEditor(renderer, handlesLayer, {
+        onBufferChange: (dist) => appRegistry.set(setBufferDistanceAtom, dist),
+      })
+      activeEditor.updateScale(getCurrentZoom())
       appRegistry.set(activePathIdRawAtom, pathKey)
       pathsLayer.moveToTop()
+      handlesLayer.moveToTop()
     }
 
-    const pathKey = `${activeLayerId}:${currentFrameId}:${activeMaskId}`
-    const bp = MutableHashMap.get(paths, pathKey)
-    if (bp._tag !== "Some") return
+    if (!activeEditor) return
 
     // Check if near the first point (close-ready) — need 3+ existing points
-    const points = bp.value.getPoints()
-    const currentZoom = (() => {
-      const r = appRegistry.get(zoomAtom) as any
-      return r?._tag === "Success" ? r.value : 1
-    })()
+    const points = activeEditor.getPoints()
+    const currentZoom = getCurrentZoom()
     const closeThreshold = Math.max(10, 15 / currentZoom)
     if (points.length >= 3) {
       const first = points[0]
@@ -461,7 +484,7 @@ export const canvasAtom = Atom.make((get) => {
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < closeThreshold) {
         // Close the path: append a point at exactly the first point's position
-        bp.value.appendPoint(first.x, first.y)
+        activeEditor.appendPoint(first.x, first.y)
         activeMaskId = null
         canvasActor?.sendSync(CanvasEvent.ClosePath)
         return
@@ -479,7 +502,7 @@ export const canvasAtom = Atom.make((get) => {
       if (nearExisting) return
     }
 
-    const id = bp.value.appendPoint(pos.x, pos.y)
+    const id = activeEditor.appendPoint(pos.x, pos.y)
     dragOrigin = { x: pos.x, y: pos.y }
     newPointId = id
     isDraggingNewHandle = false
