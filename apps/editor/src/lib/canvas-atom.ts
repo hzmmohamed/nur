@@ -13,7 +13,7 @@ import { appRegistry } from "./atom-registry"
 import { stagePositionAtom, stageSizeAtom } from "../components/canvas-minimap"
 import { createModuleLogger } from "./logger"
 import type { Frame } from "@nur/core"
-import { drawRulers, type LayerProjection } from "./canvas-objects/canvas-rulers"
+
 
 const log = createModuleLogger("canvas")
 
@@ -43,10 +43,8 @@ export const canvasAtom = Atom.make((get) => {
     height: container.clientHeight,
   })
   const imageLayer = new Konva.Layer()
-  const rulersLayer = new Konva.Layer()
   const pathsLayer = new Konva.Layer()
   stage.add(imageLayer)
-  stage.add(rulersLayer)
   stage.add(pathsLayer)
   const handlesLayer = new Konva.Layer()
   stage.add(handlesLayer)
@@ -79,15 +77,12 @@ export const canvasAtom = Atom.make((get) => {
     stage.height(h)
     appRegistry.set(stageSizeAtom, { w, h })
     updateImageTransform()
-    redrawRulers()
   })
   resizeObserver.observe(container)
 
   // -- Image management --
   let currentFrameWidth = 1
   let currentFrameHeight = 1
-  let frameOffsetX = 0
-  let frameOffsetY = 0
   let imageUnsubscribe: (() => void) | null = null
 
   function updateImageTransform() {
@@ -102,8 +97,6 @@ export const canvasAtom = Atom.make((get) => {
     konvaImage.height(scaledH)
     konvaImage.x((stage.width() - scaledW) / 2)
     konvaImage.y((stage.height() - scaledH) / 2)
-    frameOffsetX = (stage.width() - scaledW) / 2
-    frameOffsetY = (stage.height() - scaledH) / 2
     imageLayer.batchDraw()
   }
 
@@ -287,58 +280,6 @@ export const canvasAtom = Atom.make((get) => {
     return result?._tag === "Success" ? result.value : "select"
   }
 
-  function collectProjections(): LayerProjection[] {
-    if (!currentFrameId) return []
-    const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
-    const result: LayerProjection[] = []
-    for (const [layerId, layerData] of Object.entries(layersRecord)) {
-      const frameMasks = getFrameMasks(layerId, currentFrameId)
-      if (!frameMasks) continue
-      let xMin = Infinity, xMax = -Infinity
-      let yMin = Infinity, yMax = -Infinity
-      for (const maskId of Object.keys(frameMasks)) {
-        try {
-          const innerLens = (root.focus("layers").focus(layerId) as any)
-            .focus("masks").focus(currentFrameId).focus(maskId).focus("inner")
-          const points = innerLens.get() as Array<{ x: number; y: number }> | undefined
-          if (!points) continue
-          for (const pt of points) {
-            if (pt.x < xMin) xMin = pt.x
-            if (pt.x > xMax) xMax = pt.x
-            if (pt.y < yMin) yMin = pt.y
-            if (pt.y > yMax) yMax = pt.y
-          }
-        } catch { /* skip if lens not yet available */ }
-      }
-      if (xMin !== Infinity) {
-        result.push({
-          color: (layerData as any).color ?? "#888",
-          xMin,
-          xMax,
-          yMin,
-          yMax,
-        })
-      }
-    }
-    return result
-  }
-
-  function redrawRulers() {
-    const zoom = (() => {
-      const r = appRegistry.get(zoomAtom) as any
-      return r?._tag === "Success" ? r.value : 1
-    })()
-    drawRulers({
-      layer: rulersLayer,
-      frameWidth: currentFrameWidth,
-      frameHeight: currentFrameHeight,
-      frameOffsetX,
-      frameOffsetY,
-      zoom,
-      projections: collectProjections(),
-    })
-  }
-
   // -- Initial frame setup from sync'd Y.Doc data --
   function applyFrame(frameData: Frame | undefined) {
     if (frameData) {
@@ -352,7 +293,7 @@ export const canvasAtom = Atom.make((get) => {
     }
     updateImageTransform()
     pathsLayer.batchDraw()
-    redrawRulers()
+
   }
 
   const initialCurrentIdx = (() => {
@@ -415,7 +356,7 @@ export const canvasAtom = Atom.make((get) => {
     activeEditor?.updateScale(zoom)
     appRegistry.set(stagePositionAtom, { x: stage.x(), y: stage.y() })
     stage.batchDraw()
-    redrawRulers()
+
   })
 
   // -- React to view reset signal — center stage --
@@ -437,7 +378,7 @@ export const canvasAtom = Atom.make((get) => {
   get.subscribe(currentFrameMaskCountAtom, () => {
     if (currentFrameId) {
       syncPaths(currentFrameId)
-      redrawRulers()
+  
     }
   })
 
@@ -662,7 +603,7 @@ export const canvasAtom = Atom.make((get) => {
     stage.position(newPos)
     appRegistry.set(stagePositionAtom, newPos)
     stage.batchDraw()
-    redrawRulers()
+
   }
   const handlePanEnd = () => {
     if (!isPanning) return
