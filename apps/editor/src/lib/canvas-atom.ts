@@ -11,6 +11,7 @@ import { PathRenderer } from "./canvas-objects/path-renderer"
 import { PathEditor } from "./canvas-objects/path-editor"
 import { appRegistry } from "./atom-registry"
 import { stagePositionAtom, stageSizeAtom } from "../components/canvas-minimap"
+import { drawRulers } from "./canvas-objects/canvas-rulers"
 import { createModuleLogger } from "./logger"
 import type { Frame } from "@nur/core"
 
@@ -48,6 +49,8 @@ export const canvasAtom = Atom.make((get) => {
   stage.add(pathsLayer)
   const handlesLayer = new Konva.Layer()
   stage.add(handlesLayer)
+  const rulersLayer = new Konva.Layer({ listening: false })
+  stage.add(rulersLayer)
 
   let konvaImage: Konva.Image | null = null
   const paths = MutableHashMap.empty<string, PathRenderer>()
@@ -77,12 +80,15 @@ export const canvasAtom = Atom.make((get) => {
     stage.height(h)
     appRegistry.set(stageSizeAtom, { w, h })
     updateImageTransform()
+    redrawRulers()
   })
   resizeObserver.observe(container)
 
   // -- Image management --
   let currentFrameWidth = 1
   let currentFrameHeight = 1
+  let imgX = 0
+  let imgY = 0
   let imageUnsubscribe: (() => void) | null = null
 
   function updateImageTransform() {
@@ -93,10 +99,12 @@ export const canvasAtom = Atom.make((get) => {
     )
     const scaledW = currentFrameWidth * scale
     const scaledH = currentFrameHeight * scale
+    imgX = (stage.width() - scaledW) / 2
+    imgY = (stage.height() - scaledH) / 2
     konvaImage.width(scaledW)
     konvaImage.height(scaledH)
-    konvaImage.x((stage.width() - scaledW) / 2)
-    konvaImage.y((stage.height() - scaledH) / 2)
+    konvaImage.x(imgX)
+    konvaImage.y(imgY)
     imageLayer.batchDraw()
   }
 
@@ -280,6 +288,58 @@ export const canvasAtom = Atom.make((get) => {
     return result?._tag === "Success" ? result.value : "select"
   }
 
+  function collectProjections(): import("./canvas-objects/canvas-rulers").LayerProjection[] {
+    if (!currentFrameId) return []
+    const layersRecord = (root.focus("layers").syncGet() ?? {}) as Record<string, any>
+    const result: import("./canvas-objects/canvas-rulers").LayerProjection[] = []
+    for (const [layerId, layerData] of Object.entries(layersRecord)) {
+      const frameMasks = getFrameMasks(layerId, currentFrameId)
+      if (!frameMasks) continue
+      let xMin = Infinity, xMax = -Infinity
+      let yMin = Infinity, yMax = -Infinity
+      for (const maskId of Object.keys(frameMasks)) {
+        try {
+          const maskData = (root.focus("layers").focus(layerId) as any)
+            .focus("masks").focus(currentFrameId).focus(maskId).syncGet()
+          const inner = maskData?.inner
+          if (!Array.isArray(inner)) continue
+          for (const pt of inner as Array<{ x: number; y: number }>) {
+            if (pt.x < xMin) xMin = pt.x
+            if (pt.x > xMax) xMax = pt.x
+            if (pt.y < yMin) yMin = pt.y
+            if (pt.y > yMax) yMax = pt.y
+          }
+        } catch { /* skip */ }
+      }
+      if (xMin !== Infinity) {
+        result.push({ color: (layerData as any).color ?? "#888", xMin, xMax, yMin, yMax })
+      }
+    }
+    return result
+  }
+
+  function redrawRulers() {
+    // Counteract stage transform so rulers draw in screen space
+    const zoom = stage.scaleX()
+    const pos = stage.position()
+    const off = stage.offset()
+    rulersLayer.position({ x: -pos.x / zoom + off.x, y: -pos.y / zoom + off.y })
+    rulersLayer.scale({ x: 1 / zoom, y: 1 / zoom })
+
+    const frameOriginX = imgX * zoom + pos.x
+    const frameOriginY = imgY * zoom + pos.y
+
+    drawRulers({
+      layer: rulersLayer,
+      stageW: stage.width(),
+      stageH: stage.height(),
+      frameOriginX,
+      frameOriginY,
+      zoom,
+      projections: collectProjections(),
+    })
+  }
+
   // -- Initial frame setup from sync'd Y.Doc data --
   function applyFrame(frameData: Frame | undefined) {
     if (frameData) {
@@ -293,7 +353,7 @@ export const canvasAtom = Atom.make((get) => {
     }
     updateImageTransform()
     pathsLayer.batchDraw()
-
+    redrawRulers()
   }
 
   const initialCurrentIdx = (() => {
@@ -356,7 +416,7 @@ export const canvasAtom = Atom.make((get) => {
     activeEditor?.updateScale(zoom)
     appRegistry.set(stagePositionAtom, { x: stage.x(), y: stage.y() })
     stage.batchDraw()
-
+    redrawRulers()
   })
 
   // -- React to view reset signal — center stage --
@@ -365,6 +425,7 @@ export const canvasAtom = Atom.make((get) => {
     stage.offset({ x: 0, y: 0 })
     appRegistry.set(stagePositionAtom, { x: 0, y: 0 })
     stage.batchDraw()
+    redrawRulers()
   })
 
   // -- React to active layer changes — re-sync paths for current frame --
@@ -378,7 +439,7 @@ export const canvasAtom = Atom.make((get) => {
   get.subscribe(currentFrameMaskCountAtom, () => {
     if (currentFrameId) {
       syncPaths(currentFrameId)
-  
+      redrawRulers()
     }
   })
 
@@ -553,8 +614,8 @@ export const canvasAtom = Atom.make((get) => {
     e.preventDefault()
     const result = appRegistry.get(zoomAtom) as any
     const current = result?._tag === "Success" ? result.value : 1
-    const delta = e.deltaY < 0 ? 0.1 : -0.1
-    const next = Math.max(0.1, Math.min(5, current + delta))
+    const delta = e.deltaY < 0 ? 0.05 : -0.05
+    const next = Math.max(0.25, Math.min(4, current + delta))
     appRegistry.set(setZoomAtom, parseFloat(next.toFixed(2)))
   }
   container.addEventListener("wheel", handleWheel, { passive: false })
@@ -603,7 +664,7 @@ export const canvasAtom = Atom.make((get) => {
     stage.position(newPos)
     appRegistry.set(stagePositionAtom, newPos)
     stage.batchDraw()
-
+    redrawRulers()
   }
   const handlePanEnd = () => {
     if (!isPanning) return

@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/resizable"
 import { CanvasLeftPanel } from "./canvas-left-panel"
 import { CanvasMinimap } from "./canvas-minimap"
-import { CanvasRulers } from "./canvas-rulers"
 import { CanvasStatusBar } from "./canvas-status-bar"
 import { panelsDisabledAtom } from "../lib/panel-atoms"
 import { PropertiesPanel } from "./panels/properties-panel"
@@ -48,7 +47,6 @@ export function EditorLayout({ header, canvas, timeline }: EditorLayoutProps) {
                 <div className="relative flex flex-col h-full overflow-hidden">
                   <div className="flex-1 min-h-0 relative">
                     {canvas}
-                    <CanvasRulers />
                     <CanvasMinimap />
                   </div>
                   <CanvasStatusBar />
