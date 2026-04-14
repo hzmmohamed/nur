@@ -1,5 +1,5 @@
-import { Result } from "@effect-atom/atom"
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
+import { Atom, Result } from "@effect-atom/atom"
+import { useAtom, useAtomValue, useAtomSet } from "@effect-atom/atom-react/Hooks"
 import {
   canvasMachineStateAtom,
   canvasActor,
@@ -33,6 +33,11 @@ import { appRegistry } from "../lib/atom-registry"
 import { commitNewMask, discardNewMask } from "../lib/drawing-actions"
 import { buildSvgPathData } from "../lib/canvas-objects/bezier-math"
 import { Button } from "@/components/ui/button"
+
+// Tracks whether we're in a "pending uniform" state — the user switched from
+// free back to uniform but hasn't moved the buffer slider yet.
+// Set to true on free→uniform; cleared on first buffer slider interaction.
+const pendingUniformAtom = Atom.make(false)
 
 // ── Main component ─────────────────────────────────────────
 
@@ -483,7 +488,7 @@ function EditMaskPanel({
   frameCount,
   layerId,
   layers,
-  maskId,
+  maskId: _maskId,
 }: {
   currentFrame: number
   frameCount: number
@@ -497,6 +502,7 @@ function EditMaskPanel({
   const triggerSetBuffer = useAtomSet(setBufferDistanceAtom)
   const triggerSetOuterMode = useAtomSet(setOuterModeAtom)
   const editingTarget = useAtomValue(editingPathTargetAtom)
+  const [pendingUniform, setPendingUniform] = useAtom(pendingUniformAtom)
 
   return (
     <PanelShell>
@@ -516,7 +522,10 @@ function EditMaskPanel({
               variant={outerMode === "uniform" ? "secondary" : "ghost"}
               size="sm"
               className="flex-1 text-xs"
-              onClick={() => triggerSetOuterMode("uniform")}
+              onClick={() => {
+                if (outerMode === "free") setPendingUniform(true)
+                triggerSetOuterMode("uniform")
+              }}
             >
               Uniform
             </Button>
@@ -524,14 +533,17 @@ function EditMaskPanel({
               variant={outerMode === "free" ? "secondary" : "ghost"}
               size="sm"
               className="flex-1 text-xs"
-              onClick={() => triggerSetOuterMode("free")}
+              onClick={() => {
+                setPendingUniform(false)
+                triggerSetOuterMode("free")
+              }}
             >
               Free
             </Button>
           </div>
         </div>
 
-        {/* Inner/Outer — free mode only */}
+        {/* Inner/Outer path target — free mode only */}
         {outerMode === "free" && (
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Editing</label>
@@ -564,36 +576,57 @@ function EditMaskPanel({
           </div>
         )}
 
-        {/* Buffer distance */}
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Buffer</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min="2"
-              max="100"
-              step="1"
-              value={bufferDistance}
-              onChange={(e) => triggerSetBuffer(Number(e.target.value))}
-              className="flex-1 h-1 accent-muted-foreground cursor-pointer"
-            />
-            <input
-              type="number"
-              min="2"
-              max="200"
-              step="1"
-              value={bufferDistance}
-              onChange={(e) => {
-                const v = Number(e.target.value)
-                if (!isNaN(v) && v >= 2) triggerSetBuffer(v)
-              }}
-              className="w-12 h-6 px-1 text-xs text-right tabular-nums bg-transparent border border-border rounded outline-none focus:border-ring"
-            />
+        {/* Buffer distance — uniform mode only */}
+        {outerMode === "uniform" && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">Buffer</label>
+
+            {/* Pending-uniform notice */}
+            {pendingUniform && (
+              <div className="flex items-start gap-1.5 px-2 py-1.5 rounded bg-muted/60 text-muted-foreground">
+                <InfoIcon className="size-3 flex-shrink-0 mt-px" />
+                <p className="text-xs leading-snug">
+                  Move the slider to apply a new uniform buffer.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="2"
+                max="100"
+                step="1"
+                value={bufferDistance}
+                onChange={(e) => {
+                  setPendingUniform(false)
+                  triggerSetBuffer(Number(e.target.value))
+                }}
+                className="flex-1 h-1 accent-muted-foreground cursor-pointer"
+              />
+              <input
+                type="number"
+                min="2"
+                max="200"
+                step="1"
+                value={bufferDistance}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  if (!isNaN(v) && v >= 2) {
+                    setPendingUniform(false)
+                    triggerSetBuffer(v)
+                  }
+                }}
+                className="w-12 h-6 px-1 text-xs text-right tabular-nums bg-transparent border border-border rounded outline-none focus:border-ring"
+              />
+            </div>
+            {!pendingUniform && (
+              <p className="text-xs text-muted-foreground/60">
+                Drag outer path to adjust visually
+              </p>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground/60">
-            Drag outer path to adjust visually
-          </p>
-        </div>
+        )}
 
       </div>
     </PanelShell>
@@ -619,6 +652,15 @@ function MaskThumbnail({ layerId, frameId, maskId }: { layerId: string; frameId:
         if (el) renderMaskThumbnail(el, data.points, data.color)
       }}
     />
+  )
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4M12 8h.01" />
+    </svg>
   )
 }
 

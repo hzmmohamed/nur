@@ -8,7 +8,6 @@ import type { TreeNodeNested, TreeNodeRenderProps } from "@/lib/tree-types"
 import type { Layer, LayerGroup } from "@nur/core"
 import { appRegistry } from "../lib/atom-registry"
 import { canvasActor, CanvasEvent } from "../lib/canvas-machine"
-import { snapshotRowPositions } from "./timeline-flip"
 import {
   layersAtom,
   layerGroupsAtom,
@@ -315,9 +314,8 @@ function LayerNodeRenderer({
 
   return (
     <div
-      className={`flex items-center gap-1 pr-1 cursor-pointer select-none transition-colors ${
-        isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-      }${!isVisible ? " opacity-40" : ""}`}
+      className={`flex items-center gap-1 pr-1 cursor-pointer select-none transition-colors ${isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+        }${!isVisible ? " opacity-40" : ""}`}
       style={{ height: ROW_H, paddingLeft: depth * 16 + 4 }}
       data-testid="layer-row"
       onClick={(e) => {
@@ -340,9 +338,8 @@ function LayerNodeRenderer({
           aria-label={isExpanded ? "Collapse group" : "Expand group"}
         >
           <ChevronRightIcon
-            className={`size-3 text-muted-foreground transition-transform ${
-              isExpanded ? "rotate-90" : ""
-            }`}
+            className={`size-3 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""
+              }`}
           />
         </button>
       ) : (
@@ -351,9 +348,8 @@ function LayerNodeRenderer({
 
       {/* Visibility toggle */}
       <button
-        className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${
-          isVisible ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 hover:text-muted-foreground"
-        }`}
+        className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${isVisible ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 hover:text-muted-foreground"
+          }`}
         onClick={(e) => {
           e.stopPropagation()
           onToggleVisibility(data.layerId)
@@ -418,14 +414,12 @@ function LayerNodeRenderer({
             className="grid transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
             style={{ gridTemplateColumns: isHovered ? "1fr" : "0fr" }}
           >
-            <span className={`flex items-center gap-0.5 overflow-hidden min-w-0 ${
-              isHovered ? "" : "pointer-events-none"
-            }`}>
+            <span className={`flex items-center gap-0.5 overflow-hidden min-w-0 ${isHovered ? "" : "pointer-events-none"
+              }`}>
               {data.type === "layer" && (
                 <button
-                  className={`flex items-center justify-center size-5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-200 ease-out ${
-                    isHovered ? "opacity-100 translate-x-0 delay-[50ms]" : "opacity-0 translate-x-2"
-                  }`}
+                  className={`flex items-center justify-center size-5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-200 ease-out ${isHovered ? "opacity-100 translate-x-0 delay-[50ms]" : "opacity-0 translate-x-2"
+                    }`}
                   onClick={(e) => {
                     e.stopPropagation()
                     onDuplicate(data.layerId)
@@ -437,9 +431,8 @@ function LayerNodeRenderer({
                 </button>
               )}
               <button
-                className={`flex items-center justify-center size-5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all duration-200 ease-out ${
-                  isHovered ? "opacity-100 translate-x-0 delay-100" : "opacity-0 translate-x-2"
-                }`}
+                className={`flex items-center justify-center size-5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all duration-200 ease-out ${isHovered ? "opacity-100 translate-x-0 delay-100" : "opacity-0 translate-x-2"
+                  }`}
                 onClick={(e) => {
                   e.stopPropagation()
                   onDelete(data.layerId, data.type)
@@ -456,11 +449,10 @@ function LayerNodeRenderer({
         {/* Edit button — always visible, sits at right edge, gets pushed left when hover actions expand */}
         {data.type === "layer" && (
           <button
-            className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${
-              isFocused
+            className={`flex items-center justify-center size-4 flex-shrink-0 rounded transition-colors ${isFocused
                 ? "text-foreground bg-accent"
                 : "text-muted-foreground/40 hover:text-foreground"
-            }`}
+              }`}
             onClick={(e) => {
               e.stopPropagation()
               onFocus(data.layerId)
@@ -672,7 +664,6 @@ export function TimelineLayers({ headerHeight, scrollRef }: TimelineLayersProps)
             onSelectedIdsChange={handleSelectedIdsChange}
             expandedIds={expandedIds}
             onExpandedIdsChange={(ids) => {
-              snapshotRowPositions(treeItems, expandedIds)
               setExpandedIds(ids)
             }}
             draggable
