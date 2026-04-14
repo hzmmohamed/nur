@@ -1,9 +1,11 @@
 import Konva from "konva"
-import { Registry } from "@effect-atom/atom"
+import { Registry, Result } from "@effect-atom/atom"
 import type { YLinkedListLens } from "effect-yjs"
 import { buildSvgPathData, computeOuterPath } from "./bezier-math"
 import type { BezierPointData } from "./path"
 import { createModuleLogger } from "../logger"
+import { activeLayerIdAtom } from "../layer-atoms"
+import { zoomAtom } from "../viewport-atoms"
 import { tokens } from "@/tokens"
 
 const log = createModuleLogger("path-renderer")
@@ -14,9 +16,10 @@ const PATH_WIDTH = tokens.canvas.pathWidth
 const HIT_TOLERANCE = tokens.canvas.hitTolerance
 
 export interface PathRendererOptions {
+  appRegistry?: Registry.Registry
+  layerId?: string
   onSelect?: () => void
   color?: string
-  fillOpacity?: number
   outerLens?: YLinkedListLens<BezierPointData>
   bufferDistance?: number
   outerMode?: "uniform" | "free"
@@ -42,6 +45,8 @@ export class PathRenderer {
   private unsubscribeOuterList: (() => void) | null = null
   private unsubscribeMaskFields: (() => void) | null = null
   private readonly onBufferChange?: (distance: number) => void
+  private readonly layerId: string
+  private unsubscribeApp: (() => void) | null = null
 
   constructor(
     lens: YLinkedListLens<BezierPointData>,
@@ -53,7 +58,8 @@ export class PathRenderer {
     this.registry = Registry.make()
     this.onSelect = options?.onSelect
     this.fillColor = options?.color ?? null
-    this.fillOpacity = options?.fillOpacity ?? 0
+    this.fillOpacity = 0
+    this.layerId = options?.layerId ?? ""
     this._outerLens = options?.outerLens ?? null
     this._outerMode = options?.outerMode ?? "uniform"
     this._bufferDistance = options?.bufferDistance ?? 20
@@ -89,6 +95,11 @@ export class PathRenderer {
     this.startRenderLoop()
     this.startOuterRenderLoop()
     this.startMaskFieldSubscriptions(options?.maskLens)
+
+    // Self-subscribe to zoom and active layer
+    if (options?.appRegistry) {
+      this.startAppSubscriptions(options.appRegistry)
+    }
   }
 
   private startRenderLoop(): void {
@@ -133,6 +144,26 @@ export class PathRenderer {
 
       this.unsubscribeMaskFields = () => { unsub1(); unsub2() }
     } catch { /* new mask, fields not yet present */ }
+  }
+
+  private startAppSubscriptions(appRegistry: Registry.Registry): void {
+    const unsub1 = appRegistry.subscribe(zoomAtom, (zoomResult) => {
+      const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
+      this.updateScale(zoom)
+    }, { immediate: true })
+
+    const unsub2 = appRegistry.subscribe(activeLayerIdAtom, (result) => {
+      const activeId = Result.isSuccess(result) ? result.value : null
+      if (activeId === null) {
+        this.setFillOpacity(0.25)
+      } else if (activeId === this.layerId) {
+        this.setFillOpacity(0.35)
+      } else {
+        this.setFillOpacity(0.15)
+      }
+    }, { immediate: true })
+
+    this.unsubscribeApp = () => { unsub1(); unsub2() }
   }
 
   private startOuterDragHandler(): void {
@@ -230,7 +261,7 @@ export class PathRenderer {
     this.fillLayer.batchDraw()
   }
 
-  setFillOpacity(opacity: number): void {
+  private setFillOpacity(opacity: number): void {
     this.fillOpacity = opacity
     this.applyFill()
     this.fillLayer.batchDraw()
@@ -245,7 +276,7 @@ export class PathRenderer {
     this.fillLayer.batchDraw()
   }
 
-  updateScale(zoom: number): void {
+  private updateScale(zoom: number): void {
     this.currentZoom = zoom
     this.pathLine.strokeWidth(PATH_WIDTH / zoom)
     this.pathLine.hitStrokeWidth(HIT_TOLERANCE * 2 / zoom)
@@ -274,6 +305,7 @@ export class PathRenderer {
   get pathLineNode(): Konva.Path { return this.pathLine }
 
   dispose(): void {
+    this.unsubscribeApp?.()
     this.unsubscribeList?.()
     this.unsubscribeOuterList?.()
     this.unsubscribeMaskFields?.()

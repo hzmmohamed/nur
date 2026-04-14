@@ -1,13 +1,14 @@
 import Konva from "konva"
 import * as HashMap from "effect/HashMap"
 import * as HashSet from "effect/HashSet"
-import { Registry } from "@effect-atom/atom"
+import { Registry, Result } from "@effect-atom/atom"
 import type { YLinkedListLens } from "effect-yjs"
 import { cartesianToPolar, polarToCartesian } from "@/lib/domain/coordinate-utils"
 import { findNearestPointOnPath } from "./bezier-math"
 import type { BezierPointData } from "./path"
 import type { PathRenderer } from "./path-renderer"
 import { createModuleLogger } from "../logger"
+import { zoomAtom } from "../viewport-atoms"
 import { tokens } from "@/tokens"
 
 const log = createModuleLogger("path-editor")
@@ -34,6 +35,7 @@ interface PointObjects {
 }
 
 export interface PathEditorOptions {
+  appRegistry?: Registry.Registry
   onBufferChange?: (distance: number) => void
 }
 
@@ -51,6 +53,7 @@ export class PathEditor {
   private editingTarget: "inner" | "outer" = "inner"
   private currentZoom = 1
   private ghostSplitResult: ReturnType<typeof findNearestPointOnPath> | null = null
+  private unsubscribeApp: (() => void) | null = null
 
   constructor(
     renderer: PathRenderer,
@@ -72,6 +75,11 @@ export class PathEditor {
 
     this.startStructuralLoop()
     this.startGhostHandlers()
+
+    // Self-subscribe to zoom
+    if (options?.appRegistry) {
+      this.startAppSubscriptions(options.appRegistry)
+    }
   }
 
   private startStructuralLoop(): void {
@@ -265,6 +273,13 @@ export class PathEditor {
     })
   }
 
+  private startAppSubscriptions(appRegistry: Registry.Registry): void {
+    this.unsubscribeApp = appRegistry.subscribe(zoomAtom, (zoomResult) => {
+      const zoom = Result.isSuccess(zoomResult) ? zoomResult.value : 1
+      this.updateScale(zoom)
+    }, { immediate: true })
+  }
+
   setEditingTarget(target: "inner" | "outer"): void {
     if (this.editingTarget === target) return
     this.editingTarget = target
@@ -324,7 +339,7 @@ export class PathEditor {
     this.outerCurrentIds = HashSet.empty()
   }
 
-  updateScale(zoom: number): void {
+  private updateScale(zoom: number): void {
     this.currentZoom = zoom
     const inv = 1 / zoom
     HashMap.forEach(this.pointObjects, (objects) => { this.applyInverseScale(objects, inv) })
@@ -362,6 +377,7 @@ export class PathEditor {
   }
 
   dispose(): void {
+    this.unsubscribeApp?.()
     const pathLine = this.renderer.pathLineNode
     pathLine.off("pointermove.editor")
     pathLine.off("pointerleave.editor")
